@@ -95,7 +95,7 @@ export default function FilterPanel({ filters, onChange, onSearch, loading }: Pr
             Quantidade: <span style={{ color: 'var(--accent)' }}>{filters.quantidade}</span>
           </label>
           <input
-            type="range" min={5} max={50} step={5}
+            type="range" min={5} max={200} step={5}
             value={filters.quantidade}
             onChange={e => update('quantidade', Number(e.target.value))}
             style={{ accentColor: 'var(--accent)', width: '100%', marginTop: '8px' }}
