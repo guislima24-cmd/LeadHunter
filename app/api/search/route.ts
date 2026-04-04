@@ -64,8 +64,8 @@ export async function POST(req: NextRequest) {
     const companies: Company[] = (data || []).map((row: Record<string, string>, i: number) => ({
       id: String(row.id || i),
       cnpj: row.cnpj || '',
-      razao_social: row.razao_social || '',
-      nome_fantasia: row.nome_fantasia || undefined,
+      razao_social: row.razao_social || row.nome_fantasia || 'Empresa sem nome',
+      nome_fantasia: row.nome_fantasia && row.nome_fantasia !== row.razao_social ? row.nome_fantasia : undefined,
       setor: row.setor || '',
       cnae_codigo: row.cnae || undefined,
       porte: row.porte || 'Não informado',
