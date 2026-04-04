@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { createClient } from '@supabase/supabase-js'
 import { SearchFilters, Company } from '@/types'
 
 export async function POST(req: NextRequest) {
@@ -6,69 +7,79 @@ export async function POST(req: NextRequest) {
     const filters: SearchFilters = await req.json()
     const { setor, porte, cidade, estado, quantidade } = filters
 
-    const apiKey = process.env.ANTHROPIC_API_KEY
-    if (!apiKey) {
-      return NextResponse.json({ error: 'API key não configurada' }, { status: 500 })
+    const supabase = createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+    )
+
+    // Monta a query dinamicamente
+    let query = supabase
+      .from('leads')
+      .select('*')
+      .limit(Math.min(quantidade, 200))
+
+    if (setor && setor !== '') {
+      // Mapeia o value do filtro para o label do setor
+      const setorMap: Record<string, string> = {
+        tecnologia: 'Tecnologia',
+        manufatura: 'Manufatura',
+        saude: 'Saúde',
+        varejo: 'Varejo',
+        construcao: 'Construção',
+        educacao: 'Educação',
+        servicos: 'Serviços B2B',
+        logistica: 'Logística',
+        agro: 'Agronegócio',
+        financeiro: 'Financeiro',
+      }
+      const setorLabel = setorMap[setor] || setor
+      query = query.eq('setor', setorLabel)
     }
 
-    const prompt = `Você é um especialista em empresas brasileiras. Gere uma lista de ${Math.min(quantidade, 50)} empresas brasileiras reais do setor de ${setor}.
-${estado ? `Foque em empresas do estado: ${estado}` : ''}
-${cidade ? `Preferencialmente da cidade: ${cidade}` : ''}
-${porte && porte !== '' ? `Porte preferencial: ${porte}` : 'Misture portes variados (pequenas, médias e grandes)'}
-
-Retorne APENAS um JSON válido sem markdown, com este formato exato:
-[
-  {
-    "id": "1",
-    "cnpj": "XX.XXX.XXX/0001-XX",
-    "razao_social": "NOME DA EMPRESA S.A.",
-    "nome_fantasia": "Nome Fantasia",
-    "setor": "${setor}",
-    "porte": "PEQUENA ou MÉDIA ou GRANDE ou MICRO",
-    "cidade": "Nome da Cidade",
-    "estado": "${estado || 'SP'}",
-    "telefone": "(11) XXXX-XXXX",
-    "email": "contato@empresa.com.br",
-    "situacao": "Ativa",
-    "selected": false
-  }
-]
-
-Use empresas reais do mercado brasileiro. Varie os portes e cidades. Inclua e-mails e telefones plausíveis.`
-
-    const response = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-api-key': apiKey,
-        'anthropic-version': '2023-06-01',
-      },
-      body: JSON.stringify({
-        model: 'claude-haiku-4-5-20251001',
-        max_tokens: 4000,
-        messages: [{ role: 'user', content: prompt }],
-      }),
-    })
-
-    const data = await response.json()
-    const text = data.content?.[0]?.text || '[]'
-    const clean = text.replace(/```json|```/g, '').trim()
-
-    let companies: Company[] = []
-    try {
-      companies = JSON.parse(clean)
-      // Garante que todos têm selected: false e id único
-      companies = companies.map((c, i) => ({
-        ...c,
-        id: `${Date.now()}-${i}`,
-        selected: false,
-      }))
-    } catch {
-      companies = []
+    if (estado && estado !== '') {
+      query = query.eq('estado', estado)
     }
+
+    if (porte && porte !== '') {
+      const porteMap: Record<string, string> = {
+        'MEI': 'Micro',
+        'MICRO EMPRESA': 'Micro',
+        'EMPRESA DE PEQUENO PORTE': 'Pequena',
+        'DEMAIS': 'Grande',
+      }
+      const porteLabel = porteMap[porte] || porte
+      query = query.eq('porte', porteLabel)
+    }
+
+    if (cidade && cidade !== '') {
+      query = query.ilike('cidade', `%${cidade}%`)
+    }
+
+    const { data, error } = await query
+
+    if (error) {
+      return NextResponse.json({ error: error.message }, { status: 500 })
+    }
+
+    const companies: Company[] = (data || []).map((row: Record<string, string>, i: number) => ({
+      id: String(row.id || i),
+      cnpj: row.cnpj || '',
+      razao_social: row.razao_social || '',
+      nome_fantasia: row.nome_fantasia || undefined,
+      setor: row.setor || '',
+      cnae_codigo: row.cnae || undefined,
+      porte: row.porte || 'Não informado',
+      cidade: row.cidade || '',
+      estado: row.estado || '',
+      telefone: row.telefone || undefined,
+      email: row.email || undefined,
+      situacao: 'Ativa',
+      selected: false,
+    }))
 
     return NextResponse.json({ companies, total: companies.length })
   } catch (error) {
+    console.error(error)
     return NextResponse.json({ error: 'Erro na busca' }, { status: 500 })
   }
 }
