@@ -1,6 +1,6 @@
 'use client'
 import { SearchFilters } from '@/types'
-import { SETORES, PORTES, ESTADOS, IDADES_EMPRESA } from '@/data/cnaes'
+import { SETORES, ESTADOS } from '@/data/cnaes'
 
 interface Props {
   filters: SearchFilters
@@ -72,14 +72,6 @@ export default function FilterPanel({ filters, onChange, onSearch, loading }: Pr
           />
         </div>
 
-        {/* Porte */}
-        <div>
-          <label style={labelStyle}>Porte</label>
-          <select value={filters.porte} onChange={e => update('porte', e.target.value)} style={{ ...inputStyle, cursor: 'pointer' }}>
-            {PORTES.map(p => <option key={p.value} value={p.value}>{p.label}</option>)}
-          </select>
-        </div>
-
         {/* Estado */}
         <div>
           <label style={labelStyle}>Estado</label>
@@ -100,16 +92,8 @@ export default function FilterPanel({ filters, onChange, onSearch, loading }: Pr
           />
         </div>
 
-        {/* Idade da Empresa */}
-        <div>
-          <label style={labelStyle}>Idade</label>
-          <select value={filters.idadeEmpresa} onChange={e => update('idadeEmpresa', e.target.value)} style={{ ...inputStyle, cursor: 'pointer' }}>
-            {IDADES_EMPRESA.map(i => <option key={i.value} value={i.value}>{i.label}</option>)}
-          </select>
-        </div>
-
         {/* Apenas com Contato */}
-        <div style={{ gridColumn: 'span 2', display: 'flex', alignItems: 'center', gap: '10px', padding: '8px 0' }}>
+        <div style={{ gridColumn: 'span 2', display: 'flex', alignItems: 'center', gap: '10px', padding: '4px 0' }}>
           <input
             type="checkbox"
             checked={filters.apenasComContato}
