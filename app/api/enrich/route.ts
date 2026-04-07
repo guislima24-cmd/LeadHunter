@@ -7,7 +7,8 @@ export async function POST(req: NextRequest) {
     const apiKey = process.env.ANTHROPIC_API_KEY
 
     if (!apiKey) {
-      return NextResponse.json({ error: 'API key não configurada' }, { status: 500 })
+      console.error('[enrich] ANTHROPIC_API_KEY não configurada')
+      return NextResponse.json({ error: 'API key não configurada. Configure ANTHROPIC_API_KEY nas variáveis de ambiente.' }, { status: 500 })
     }
 
     const enriched = await Promise.all(
@@ -44,13 +45,20 @@ Retorne APENAS um JSON válido com este formato, sem explicações ou markdown:
             }),
           })
 
+          if (!res.ok) {
+            const errBody = await res.text()
+            console.error(`[enrich] Anthropic API error ${res.status}:`, errBody)
+            return company
+          }
+
           const data = await res.json()
           const text = data.content?.[0]?.text || '{}'
           const clean = text.replace(/```json|```/g, '').trim()
           const enrichment = JSON.parse(clean)
 
           return { ...company, enrichment }
-        } catch {
+        } catch (err) {
+          console.error('[enrich] Erro ao enriquecer empresa:', company.razao_social, err)
           return company
         }
       })
@@ -58,6 +66,7 @@ Retorne APENAS um JSON válido com este formato, sem explicações ou markdown:
 
     return NextResponse.json({ companies: enriched })
   } catch (error) {
-    return NextResponse.json({ error: 'Erro interno' }, { status: 500 })
+    console.error('[enrich] Erro interno:', error)
+    return NextResponse.json({ error: 'Erro interno no servidor' }, { status: 500 })
   }
 }
