@@ -51,10 +51,14 @@ export default function Home() {
         body: JSON.stringify({ companies: selected }),
       })
       const data = await res.json()
+      if (!res.ok || data.error) {
+        alert(`Erro no enriquecimento: ${data.error || 'Erro desconhecido'}`)
+        return
+      }
       const enrichedMap = new Map(data.companies.map((c: Company) => [c.id, c]))
       setCompanies(prev => prev.map(c => enrichedMap.has(c.id) ? enrichedMap.get(c.id) as Company : c))
-    } catch {
-      alert('Erro no enriquecimento.')
+    } catch (err) {
+      alert(`Erro no enriquecimento: ${err instanceof Error ? err.message : 'Erro de conexão'}`)
     } finally {
       setEnriching(false)
     }
