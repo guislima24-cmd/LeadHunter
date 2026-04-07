@@ -25,6 +25,13 @@ export const ESTADOS = [
   'SP','SE','TO'
 ]
 
+export const IDADES_EMPRESA = [
+  { label: 'Todas', value: '' },
+  { label: 'Novas (< 2 anos)', value: 'nova' },
+  { label: 'Estabelecidas (2-10 anos)', value: 'estabelecida' },
+  { label: 'Tradicionais (> 10 anos)', value: 'tradicional' },
+]
+
 export function cnaeToSetor(cnae: string): string {
   const prefix = cnae.substring(0, 4)
   for (const setor of SETORES) {
