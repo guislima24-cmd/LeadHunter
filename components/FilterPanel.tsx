@@ -1,6 +1,6 @@
 'use client'
 import { SearchFilters } from '@/types'
-import { SETORES, PORTES, ESTADOS } from '@/data/cnaes'
+import { SETORES, PORTES, ESTADOS, IDADES_EMPRESA } from '@/data/cnaes'
 
 interface Props {
   filters: SearchFilters
@@ -33,7 +33,7 @@ const labelStyle = {
 }
 
 export default function FilterPanel({ filters, onChange, onSearch, loading }: Props) {
-  const update = (key: keyof SearchFilters, value: string | number) => {
+  const update = (key: keyof SearchFilters, value: string | number | boolean) => {
     onChange({ ...filters, [key]: value })
   }
 
@@ -59,6 +59,17 @@ export default function FilterPanel({ filters, onChange, onSearch, loading }: Pr
               <option key={s.value} value={s.value}>{s.label}</option>
             ))}
           </select>
+        </div>
+
+        {/* Nome da Empresa */}
+        <div style={{ gridColumn: 'span 2' }}>
+          <label style={labelStyle}>Nome da Empresa</label>
+          <input
+            style={inputStyle}
+            placeholder="Ex: Padaria do João"
+            value={filters.nomeEmpresa}
+            onChange={e => update('nomeEmpresa', e.target.value)}
+          />
         </div>
 
         {/* Porte */}
@@ -89,8 +100,30 @@ export default function FilterPanel({ filters, onChange, onSearch, loading }: Pr
           />
         </div>
 
-        {/* Quantidade */}
+        {/* Idade da Empresa */}
         <div>
+          <label style={labelStyle}>Idade</label>
+          <select value={filters.idadeEmpresa} onChange={e => update('idadeEmpresa', e.target.value)} style={{ ...inputStyle, cursor: 'pointer' }}>
+            {IDADES_EMPRESA.map(i => <option key={i.value} value={i.value}>{i.label}</option>)}
+          </select>
+        </div>
+
+        {/* Apenas com Contato */}
+        <div style={{ gridColumn: 'span 2', display: 'flex', alignItems: 'center', gap: '10px', padding: '8px 0' }}>
+          <input
+            type="checkbox"
+            checked={filters.apenasComContato}
+            onChange={e => update('apenasComContato', e.target.checked)}
+            style={{ accentColor: 'var(--accent)', width: '16px', height: '16px', cursor: 'pointer' }}
+            id="contato-filter"
+          />
+          <label htmlFor="contato-filter" style={{ color: 'var(--text-secondary)', fontSize: '0.8rem', fontFamily: 'DM Sans, sans-serif', cursor: 'pointer' }}>
+            Apenas leads com email ou telefone
+          </label>
+        </div>
+
+        {/* Quantidade */}
+        <div style={{ gridColumn: 'span 2' }}>
           <label style={labelStyle}>
             Quantidade: <span style={{ color: 'var(--accent)' }}>{filters.quantidade}</span>
           </label>

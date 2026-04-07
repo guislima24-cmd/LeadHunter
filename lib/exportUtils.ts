@@ -5,22 +5,23 @@ export function exportToCSV(companies: Company[]): void {
   const date = new Date().toISOString().split('T')[0].replace(/-/g, '')
 
   const rows = companies.map(c => ({
-    'First Name': '',
-    'Last Name': '',
-    'Title': '',
+    'Nome Lead': c.nome_lead || '',
     'Company': c.nome_fantasia || c.razao_social,
+    'Razao Social': c.razao_social,
     'Industry': c.setor,
-    '# Employees': '',
+    'CNAE': c.cnae_codigo || '',
+    'Porte': c.porte,
     'City': c.cidade,
+    'State': c.estado,
     'Email': c.email || '',
     'Phone': c.telefone || '',
+    'Site': c.site || '',
     'CNPJ': c.cnpj,
-    'State': c.estado,
-    'Porte': c.porte,
     'Data Abertura': c.data_abertura || '',
     'Dor Provavel': c.enrichment?.dor_provavel || '',
     'Abordagem Sugerida': c.enrichment?.abordagem_sugerida || '',
     'Gancho': c.enrichment?.gancho || '',
+    'Justificativa': c.enrichment?.justificativa || '',
   }))
 
   const csv = Papa.unparse(rows)

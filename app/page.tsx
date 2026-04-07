@@ -11,6 +11,9 @@ const defaultFilters: SearchFilters = {
   cidade: '',
   estado: '',
   quantidade: 10,
+  nomeEmpresa: '',
+  apenasComContato: false,
+  idadeEmpresa: '',
 }
 
 export default function Home() {

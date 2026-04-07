@@ -3,6 +3,7 @@ export interface Company {
   cnpj: string
   razao_social: string
   nome_fantasia?: string
+  nome_lead?: string
   setor: string
   cnae_codigo?: string
   porte: string
@@ -10,6 +11,7 @@ export interface Company {
   estado: string
   telefone?: string
   email?: string
+  site?: string
   situacao: string
   data_abertura?: string
   enrichment?: Enrichment
@@ -29,6 +31,9 @@ export interface SearchFilters {
   cidade: string
   estado: string
   quantidade: number
+  nomeEmpresa: string
+  apenasComContato: boolean
+  idadeEmpresa: string
 }
 
 export interface CNPJApiResponse {
