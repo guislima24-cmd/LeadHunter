@@ -11,9 +11,7 @@ export interface Company {
   estado: string
   telefone?: string
   email?: string
-  site?: string
   situacao: string
-  data_abertura?: string
   enrichment?: Enrichment
   selected: boolean
 }
@@ -27,13 +25,11 @@ export interface Enrichment {
 
 export interface SearchFilters {
   setor: string
-  porte: string
   cidade: string
   estado: string
   quantidade: number
   nomeEmpresa: string
   apenasComContato: boolean
-  idadeEmpresa: string
 }
 
 export interface CNPJApiResponse {

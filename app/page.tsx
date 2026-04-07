@@ -7,13 +7,11 @@ import { exportToCSV } from '@/lib/exportUtils'
 
 const defaultFilters: SearchFilters = {
   setor: '',
-  porte: '',
   cidade: '',
   estado: '',
   quantidade: 10,
   nomeEmpresa: '',
   apenasComContato: false,
-  idadeEmpresa: '',
 }
 
 export default function Home() {

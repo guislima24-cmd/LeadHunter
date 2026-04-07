@@ -31,7 +31,6 @@ export async function fetchCNPJ(cnpj: string): Promise<Company | null> {
       telefone: data.ddd_telefone_1 ? formatPhone(data.ddd_telefone_1) : undefined,
       email: data.email?.toLowerCase() || undefined,
       situacao: 'Ativa',
-      data_abertura: data.data_inicio_atividade,
       selected: false,
     }
   } catch {
@@ -56,7 +55,6 @@ export async function fetchCNPJ(cnpj: string): Promise<Company | null> {
         telefone: data2.telefone || undefined,
         email: data2.email?.toLowerCase() || undefined,
         situacao: 'Ativa',
-        data_abertura: data2.abertura,
         selected: false,
       }
     } catch {
