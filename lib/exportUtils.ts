@@ -5,21 +5,21 @@ export function exportToCSV(companies: Company[]): void {
   const date = new Date().toISOString().split('T')[0].replace(/-/g, '')
 
   const rows = companies.map(c => ({
-    'Nome Lead': c.nome_lead || '',
-    'Company': c.nome_fantasia || c.razao_social,
-    'Razao Social': c.razao_social,
-    'Industry': c.setor,
-    'CNAE': c.cnae_codigo || '',
-    'Porte': c.porte,
-    'City': c.cidade,
-    'State': c.estado,
-    'Email': c.email || '',
-    'Phone': c.telefone || '',
-    'CNPJ': c.cnpj,
-    'Dor Provavel': c.enrichment?.dor_provavel || '',
-    'Abordagem Sugerida': c.enrichment?.abordagem_sugerida || '',
-    'Gancho': c.enrichment?.gancho || '',
-    'Justificativa': c.enrichment?.justificativa || '',
+    'nome': c.nome_lead || '',
+    'empresa': c.nome_fantasia || c.razao_social,
+    'razao_social': c.razao_social,
+    'setor': c.setor,
+    'cnae': c.cnae_codigo || '',
+    'porte': c.porte,
+    'cidade': c.cidade,
+    'estado': c.estado,
+    'email': c.email || '',
+    'telefone': c.telefone || '',
+    'cnpj': c.cnpj,
+    'dor_provavel': c.enrichment?.dor_provavel || '',
+    'abordagem_sugerida': c.enrichment?.abordagem_sugerida || '',
+    'gancho': c.enrichment?.gancho || '',
+    'justificativa': c.enrichment?.justificativa || '',
   }))
 
   const csv = Papa.unparse(rows)
