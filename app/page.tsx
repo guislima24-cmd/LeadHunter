@@ -124,7 +124,7 @@ export default function Home() {
               Base pública da Receita Federal · gratuito
             </p>
           </div>
-          <FilterPanel filters={filters} onChange={setFilters} onSearch={handleSearch} loading={loading} />
+          <FilterPanel filters={filters} onChange={setFilters} onSearch={() => handleSearch()} loading={loading} />
 
           {/* Info */}
           <div style={{ marginTop: '16px', background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: '10px', padding: '14px' }}>
