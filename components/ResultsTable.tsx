@@ -92,6 +92,7 @@ export default function ResultsTable({ companies, onToggle, onToggleAll }: Props
                 {company.email && (
                   <div style={{ color: 'var(--text-secondary)', fontSize: '0.8rem', marginBottom: '4px', wordBreak: 'break-all' }}>
                     ✉ {company.email}
+                    <span style={{ color: 'var(--text-muted)', fontSize: '0.6rem', marginLeft: '4px' }}>· RF</span>
                   </div>
                 )}
                 {company.telefone && (

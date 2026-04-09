@@ -23,13 +23,25 @@ export interface Enrichment {
   gancho: string
 }
 
+export type FiltroContato = 'todos' | 'comContato' | 'apenasEmail' | 'apenasTelefone'
+
 export interface SearchFilters {
   setor: string
   cidade: string
   estado: string
   quantidade: number
   nomeEmpresa: string
-  apenasComContato: boolean
+  filtroContato: FiltroContato
+  page: number
+  porPagina: number
+}
+
+export interface SearchResponse {
+  companies: Company[]
+  total: number
+  page: number
+  porPagina: number
+  totalPages: number
 }
 
 export interface CNPJApiResponse {

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
-import { SearchFilters, Company } from '@/types'
+import { SearchFilters, Company, SearchResponse } from '@/types'
 
 // Remove acentos para busca normalizada (DB armazena sem acentos)
 function removeAccents(str: string): string {
@@ -26,14 +26,28 @@ function extrairNomeLead(razaoSocial: string, porte: string): string | undefined
 export async function POST(req: NextRequest) {
   try {
     const filters: SearchFilters = await req.json()
-    const { setor, cidade, estado, quantidade, nomeEmpresa, apenasComContato } = filters
+    const { setor, cidade, estado, quantidade, nomeEmpresa, filtroContato, page = 1, porPagina = 50 } = filters
 
     const supabase = createClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
       process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
     )
 
-    let query = supabase.from('leads').select('*')
+    const safeQuantidade = Math.min(quantidade, 1000)
+    const safePorPagina = Math.min(porPagina, 100)
+    const safePage = Math.max(1, page)
+    const offset = (safePage - 1) * safePorPagina
+
+    // Se o offset já passou do total desejado, retorna vazio
+    if (offset >= safeQuantidade) {
+      const empty: SearchResponse = { companies: [], total: 0, page: safePage, porPagina: safePorPagina, totalPages: 0 }
+      return NextResponse.json(empty)
+    }
+
+    // Limita esta página para não ultrapassar quantidade total desejada
+    const thisPageLimit = Math.min(safePorPagina, safeQuantidade - offset)
+
+    let query = supabase.from('leads').select('*', { count: 'exact' })
 
     if (setor && setor !== '') {
       const setorMap: Record<string, string> = {
@@ -68,15 +82,19 @@ export async function POST(req: NextRequest) {
       query = query.or(`razao_social.ilike.%${nomeNorm}%,nome_fantasia.ilike.%${nomeNorm}%`)
     }
 
-    // Apenas leads com contato (email ou telefone preenchido)
-    if (apenasComContato) {
+    // Filtro de contato
+    if (filtroContato === 'comContato') {
       query = query.or('email.neq.,telefone.neq.')
+    } else if (filtroContato === 'apenasEmail') {
+      query = query.neq('email', '')
+    } else if (filtroContato === 'apenasTelefone') {
+      query = query.neq('telefone', '')
     }
 
-    // Limit sempre no final
-    query = query.limit(Math.min(quantidade, 200))
+    // Paginação com range (offset-based)
+    query = query.range(offset, offset + thisPageLimit - 1)
 
-    const { data, error } = await query
+    const { data, error, count } = await query
 
     if (error) {
       return NextResponse.json({ error: error.message }, { status: 500 })
@@ -99,7 +117,19 @@ export async function POST(req: NextRequest) {
       selected: false,
     }))
 
-    return NextResponse.json({ companies, total: companies.length })
+    // Total limitado pela quantidade desejada pelo usuário
+    const totalInPool = Math.min(count || 0, safeQuantidade)
+    const totalPages = Math.ceil(totalInPool / safePorPagina)
+
+    const response: SearchResponse = {
+      companies,
+      total: totalInPool,
+      page: safePage,
+      porPagina: safePorPagina,
+      totalPages,
+    }
+
+    return NextResponse.json(response)
   } catch (error) {
     console.error(error)
     return NextResponse.json({ error: 'Erro na busca' }, { status: 500 })
