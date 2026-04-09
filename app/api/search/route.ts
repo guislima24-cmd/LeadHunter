@@ -47,7 +47,8 @@ export async function POST(req: NextRequest) {
     // Limita esta página para não ultrapassar quantidade total desejada
     const thisPageLimit = Math.min(safePorPagina, safeQuantidade - offset)
 
-    let query = supabase.from('leads').select('*', { count: 'exact' })
+    // Busca thisPageLimit + 1 para saber se há próxima página (evita COUNT que causa timeout)
+    let query = supabase.from('leads').select('*')
 
     if (setor && setor !== '') {
       const setorMap: Record<string, string> = {
@@ -91,16 +92,20 @@ export async function POST(req: NextRequest) {
       query = query.neq('telefone', '')
     }
 
-    // Paginação com range (offset-based) — order obrigatório para range funcionar
-    query = query.order('id').range(offset, offset + thisPageLimit - 1)
+    // Busca 1 a mais para detectar se há próxima página (sem COUNT custoso)
+    query = query.order('id').range(offset, offset + thisPageLimit)
 
-    const { data, error, count } = await query
+    const { data, error } = await query
 
     if (error) {
       return NextResponse.json({ error: error.message }, { status: 500 })
     }
 
-    const companies: Company[] = (data || []).map((row: Record<string, string>, i: number) => ({
+    const rows = data || []
+    const hasNextPage = rows.length > thisPageLimit
+    const pageRows = hasNextPage ? rows.slice(0, thisPageLimit) : rows
+
+    const companies: Company[] = pageRows.map((row: Record<string, string>, i: number) => ({
       id: String(row.id || i),
       cnpj: row.cnpj || '',
       razao_social: row.razao_social || row.nome_fantasia || 'Empresa sem nome',
@@ -117,13 +122,19 @@ export async function POST(req: NextRequest) {
       selected: false,
     }))
 
-    // Total limitado pela quantidade desejada pelo usuário
-    const totalInPool = Math.min(count || 0, safeQuantidade)
-    const totalPages = Math.ceil(totalInPool / safePorPagina)
+    // Estimativa de páginas baseada no que sabemos
+    // Se há próxima página, total é pelo menos (page * porPagina) + 1
+    // Caso contrário, total é offset + rows retornadas
+    const estimatedTotal = hasNextPage
+      ? Math.min(safePage * safePorPagina + safePorPagina, safeQuantidade)
+      : offset + pageRows.length
+    const totalPages = hasNextPage
+      ? Math.min(safePage + 1, Math.ceil(safeQuantidade / safePorPagina))
+      : safePage
 
     const response: SearchResponse = {
       companies,
-      total: totalInPool,
+      total: estimatedTotal,
       page: safePage,
       porPagina: safePorPagina,
       totalPages,
