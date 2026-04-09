@@ -37,7 +37,11 @@ export default function Home() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ ...filters, page }),
       })
-      const data: SearchResponse = await res.json()
+      const data = await res.json()
+      if (!res.ok || data.error) {
+        alert(`Erro na busca: ${data.error || 'Erro desconhecido'}`)
+        return
+      }
       setCompanies(data.companies || [])
       setTotalResults(data.total)
       setCurrentPage(data.page)

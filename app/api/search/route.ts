@@ -91,8 +91,8 @@ export async function POST(req: NextRequest) {
       query = query.neq('telefone', '')
     }
 
-    // Paginação com range (offset-based)
-    query = query.range(offset, offset + thisPageLimit - 1)
+    // Paginação com range (offset-based) — order obrigatório para range funcionar
+    query = query.order('id').range(offset, offset + thisPageLimit - 1)
 
     const { data, error, count } = await query
 
