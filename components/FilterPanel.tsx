@@ -92,18 +92,19 @@ export default function FilterPanel({ filters, onChange, onSearch, loading }: Pr
           />
         </div>
 
-        {/* Apenas com Contato */}
-        <div style={{ gridColumn: 'span 2', display: 'flex', alignItems: 'center', gap: '10px', padding: '4px 0' }}>
-          <input
-            type="checkbox"
-            checked={filters.apenasComContato}
-            onChange={e => update('apenasComContato', e.target.checked)}
-            style={{ accentColor: 'var(--accent)', width: '16px', height: '16px', cursor: 'pointer' }}
-            id="contato-filter"
-          />
-          <label htmlFor="contato-filter" style={{ color: 'var(--text-secondary)', fontSize: '0.8rem', fontFamily: 'DM Sans, sans-serif', cursor: 'pointer' }}>
-            Apenas leads com email ou telefone
-          </label>
+        {/* Filtro de Contato */}
+        <div style={{ gridColumn: 'span 2' }}>
+          <label style={labelStyle}>Filtro de Contato</label>
+          <select
+            value={filters.filtroContato}
+            onChange={e => update('filtroContato', e.target.value)}
+            style={{ ...inputStyle, cursor: 'pointer' }}
+          >
+            <option value="todos">Todos os leads</option>
+            <option value="comContato">Com email ou telefone</option>
+            <option value="apenasEmail">Somente com email</option>
+            <option value="apenasTelefone">Somente com telefone</option>
+          </select>
         </div>
 
         {/* Quantidade */}
@@ -112,7 +113,7 @@ export default function FilterPanel({ filters, onChange, onSearch, loading }: Pr
             Quantidade: <span style={{ color: 'var(--accent)' }}>{filters.quantidade}</span>
           </label>
           <input
-            type="range" min={5} max={200} step={5}
+            type="range" min={10} max={1000} step={10}
             value={filters.quantidade}
             onChange={e => update('quantidade', Number(e.target.value))}
             style={{ accentColor: 'var(--accent)', width: '100%', marginTop: '8px' }}

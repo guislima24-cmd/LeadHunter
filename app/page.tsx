@@ -2,16 +2,19 @@
 import { useState } from 'react'
 import FilterPanel from '@/components/FilterPanel'
 import ResultsTable from '@/components/ResultsTable'
-import { Company, SearchFilters } from '@/types'
+import Pagination from '@/components/Pagination'
+import { Company, SearchFilters, SearchResponse } from '@/types'
 import { exportToCSV } from '@/lib/exportUtils'
 
 const defaultFilters: SearchFilters = {
   setor: '',
   cidade: '',
   estado: '',
-  quantidade: 10,
+  quantidade: 50,
   nomeEmpresa: '',
-  apenasComContato: false,
+  filtroContato: 'todos',
+  page: 1,
+  porPagina: 50,
 }
 
 export default function Home() {
@@ -20,8 +23,11 @@ export default function Home() {
   const [loading, setLoading] = useState(false)
   const [enriching, setEnriching] = useState(false)
   const [searched, setSearched] = useState(false)
+  const [totalResults, setTotalResults] = useState(0)
+  const [currentPage, setCurrentPage] = useState(1)
+  const [totalPages, setTotalPages] = useState(0)
 
-  const handleSearch = async () => {
+  const handleSearch = async (page = 1) => {
     setLoading(true)
     setSearched(true)
     setCompanies([])
@@ -29,14 +35,23 @@ export default function Home() {
       const res = await fetch('/api/search', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(filters),
+        body: JSON.stringify({ ...filters, page }),
       })
-      const data = await res.json()
+      const data: SearchResponse = await res.json()
       setCompanies(data.companies || [])
+      setTotalResults(data.total)
+      setCurrentPage(data.page)
+      setTotalPages(data.totalPages)
     } catch {
       alert('Erro na busca. Tente novamente.')
     } finally {
       setLoading(false)
+    }
+  }
+
+  const handlePageChange = (newPage: number) => {
+    if (newPage >= 1 && newPage <= totalPages) {
+      handleSearch(newPage)
     }
   }
 
@@ -154,7 +169,12 @@ export default function Home() {
             <div className="fade-in">
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px' }}>
                 <h2 style={{ fontFamily: 'Syne, sans-serif', fontWeight: 800, fontSize: '1.1rem' }}>
-                  <span style={{ color: 'var(--accent)' }}>{companies.length}</span> empresas encontradas
+                  <span style={{ color: 'var(--accent)' }}>{totalResults}</span> empresas encontradas
+                  {totalPages > 1 && (
+                    <span style={{ color: 'var(--text-muted)', fontWeight: 400, fontSize: '0.8rem', marginLeft: '8px' }}>
+                      · Página {currentPage} de {totalPages}
+                    </span>
+                  )}
                 </h2>
                 {selectedCount > 0 && (
                   <span style={{ color: 'var(--text-muted)', fontSize: '0.8rem' }}>
@@ -163,6 +183,7 @@ export default function Home() {
                 )}
               </div>
               <ResultsTable companies={companies} onToggle={toggle} onToggleAll={toggleAll} />
+              <Pagination currentPage={currentPage} totalPages={totalPages} onPageChange={handlePageChange} />
             </div>
           )}
         </div>
