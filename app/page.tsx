@@ -1,9 +1,9 @@
 'use client'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import FilterPanel from '@/components/FilterPanel'
 import ResultsTable from '@/components/ResultsTable'
 import Pagination from '@/components/Pagination'
-import { Company, SearchFilters, SearchResponse } from '@/types'
+import { Company, SearchFilters } from '@/types'
 import { exportToCSV } from '@/lib/exportUtils'
 
 const defaultFilters: SearchFilters = {
@@ -17,6 +17,8 @@ const defaultFilters: SearchFilters = {
   porPagina: 50,
 }
 
+type Health = { ok: true } | { ok: false; message: string; stage?: string }
+
 export default function Home() {
   const [filters, setFilters] = useState<SearchFilters>(defaultFilters)
   const [companies, setCompanies] = useState<Company[]>([])
@@ -26,6 +28,16 @@ export default function Home() {
   const [totalResults, setTotalResults] = useState(0)
   const [currentPage, setCurrentPage] = useState(1)
   const [totalPages, setTotalPages] = useState(0)
+  const [health, setHealth] = useState<Health | null>(null)
+
+  useEffect(() => {
+    let cancelled = false
+    fetch('/api/health')
+      .then(r => r.json())
+      .then(data => { if (!cancelled) setHealth(data) })
+      .catch(err => { if (!cancelled) setHealth({ ok: false, message: String(err) }) })
+    return () => { cancelled = true }
+  }, [])
 
   const handleSearch = async (page = 1) => {
     setLoading(true)
@@ -116,6 +128,13 @@ export default function Home() {
           )}
         </div>
       </header>
+
+      {health && health.ok === false && (
+        <div style={{ background: 'rgba(239,68,68,0.08)', borderBottom: '1px solid rgba(239,68,68,0.4)', padding: '12px 32px', color: '#fca5a5', fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <span style={{ background: '#ef4444', color: '#000', fontFamily: 'Syne, sans-serif', fontWeight: 800, fontSize: '0.65rem', padding: '2px 6px', borderRadius: '4px' }}>SUPABASE OFFLINE</span>
+          <span>{health.message}</span>
+        </div>
+      )}
 
       <main style={{ maxWidth: '1100px', margin: '0 auto', padding: '32px 24px', display: 'grid', gridTemplateColumns: '280px 1fr', gap: '24px', alignItems: 'start' }}>
         {/* Sidebar filtros */}

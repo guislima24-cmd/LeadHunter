@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createClient } from '@supabase/supabase-js'
 import { SearchFilters, Company, SearchResponse } from '@/types'
+import { getSupabase, describeSupabaseError } from '@/lib/supabase'
 
 // Remove acentos para busca normalizada (DB armazena sem acentos)
 function removeAccents(str: string): string {
@@ -28,10 +28,11 @@ export async function POST(req: NextRequest) {
     const filters: SearchFilters = await req.json()
     const { setor, cidade, estado, quantidade, nomeEmpresa, filtroContato, page = 1, porPagina = 50 } = filters
 
-    const supabase = createClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-    )
+    const cfg = getSupabase()
+    if (!cfg.ok) {
+      return NextResponse.json({ error: cfg.message, reason: cfg.reason }, { status: 500 })
+    }
+    const supabase = cfg.client
 
     const safeQuantidade = Math.min(quantidade, 1000)
     const safePorPagina = Math.min(porPagina, 100)
@@ -98,7 +99,11 @@ export async function POST(req: NextRequest) {
     const { data, error } = await query
 
     if (error) {
-      return NextResponse.json({ error: error.message }, { status: 500 })
+      console.error('[search] Supabase error:', error)
+      return NextResponse.json(
+        { error: describeSupabaseError(error), code: error.code },
+        { status: 500 }
+      )
     }
 
     const rows = data || []
@@ -122,9 +127,6 @@ export async function POST(req: NextRequest) {
       selected: false,
     }))
 
-    // Estimativa de páginas baseada no que sabemos
-    // Se há próxima página, total é pelo menos (page * porPagina) + 1
-    // Caso contrário, total é offset + rows retornadas
     const estimatedTotal = hasNextPage
       ? Math.min(safePage * safePorPagina + safePorPagina, safeQuantidade)
       : offset + pageRows.length
@@ -142,7 +144,8 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json(response)
   } catch (error) {
-    console.error(error)
-    return NextResponse.json({ error: 'Erro na busca' }, { status: 500 })
+    console.error('[search] Erro inesperado:', error)
+    const msg = error instanceof Error ? error.message : 'Erro na busca'
+    return NextResponse.json({ error: msg }, { status: 500 })
   }
 }
