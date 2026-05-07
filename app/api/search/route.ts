@@ -98,7 +98,14 @@ export async function POST(req: NextRequest) {
     const { data, error } = await query
 
     if (error) {
-      return NextResponse.json({ error: error.message }, { status: 500 })
+      const msg = error.message || ''
+      if (msg.includes('fetch failed') || msg.includes('<!DOCTYPE') || msg.includes('521')) {
+        return NextResponse.json(
+          { error: 'Banco de dados temporariamente indisponível. Tente novamente em alguns minutos.' },
+          { status: 503 }
+        )
+      }
+      return NextResponse.json({ error: msg || 'Erro no banco' }, { status: 500 })
     }
 
     const rows = data || []
@@ -143,6 +150,13 @@ export async function POST(req: NextRequest) {
     return NextResponse.json(response)
   } catch (error) {
     console.error(error)
+    const msg = error instanceof Error ? error.message : ''
+    if (msg.includes('fetch failed') || msg.includes('<!DOCTYPE') || msg.includes('521')) {
+      return NextResponse.json(
+        { error: 'Banco de dados temporariamente indisponível. Tente novamente em alguns minutos.' },
+        { status: 503 }
+      )
+    }
     return NextResponse.json({ error: 'Erro na busca' }, { status: 500 })
   }
 }
