@@ -67,8 +67,15 @@ Ao responder, o W1 dispara o W2 (enriquecimento) sem esperar o resultado.
 
 ## Pré-requisitos antes de ativar
 
-### 1. Banco (Supabase `leadhunter`)
-Rodar `n8n/sql/001_pipeline_n8n.sql` uma vez (SQL Editor do Supabase ou `psql`). São só colunas novas e tabelas novas — nada é apagado. **O projeto está pausado (INACTIVE); é preciso reativá-lo antes.**
+### 1. Banco (Supabase `leadhunter`) — ✅ já aplicado
+`n8n/sql/001_pipeline_n8n.sql` foi aplicado em 18/08/2026 no projeto `dulpeemmwhudcjqwbolr`, em quatro migrações (`n8n_pipeline_colunas_leads`, `n8n_pipeline_tabelas_dedupe_e_emails`, `n8n_pipeline_indice_cnpj_leads`, `n8n_pipeline_validar_constraints_leads`).
+
+- 12 colunas novas em `leads` (1,65M linhas / 350 MB) + as CHECKs de `etapa_funil` e `enriquecimento_status`, criadas como `NOT VALID` e validadas em seguida para não travar escrita durante o scan.
+- Tabelas `lead_reservas`, `listas_geradas` e `emails_enviados`, com RLS ligado e sem policies — as chaves anon/authenticated não enxergam nada; o n8n entra por conexão Postgres direta (role `postgres`), que ignora RLS.
+- Índice `leads_cnpj_idx` (os de setor, cidade, estado e porte já existiam).
+- Queries do W1, W2 e W3 rodadas contra os dados reais como teste de fumaça; as linhas de teste foram removidas (`leads` segue com 0 registros marcados como contatados).
+
+⚠️ **Formato do CNPJ**: a coluna `leads.cnpj` guarda o valor formatado (`06.370.174/0003-94`), não só dígitos. O dedupe e o casamento entre W1/W2/W3 usam sempre esse mesmo valor, mas qualquer integração externa precisa respeitar o formato.
 
 ### 2. Credenciais a conectar na UI do n8n
 Nenhuma credencial existia na instância, então cada nó autenticado está com o slot vazio.
@@ -115,4 +122,13 @@ Executados com pin data (sem tocar em serviço externo):
 - W6: as três ações (`criar_no_notion`, `atualizar_no_notion`, `atualizar_na_planilha`) roteadas corretamente pelo comparador de timestamps.
 - W7: métricas por etapa conferidas (quantidade, acumulado, taxa de conversão em cascata, tempo médio, etapas terminais sem tempo médio).
 
-Falta a execução real ponta a ponta, que só é possível depois das credenciais conectadas.
+No banco real (Supabase), com literais no lugar dos parâmetros:
+- W1 *Buscar Candidatos* e *Registrar Lista e Reservas* (lista + 2 reservas criadas e depois removidas).
+- W2 *Buscar Leads da Lista* (join por `cnpj = any(lead_cnpjs)`).
+- W3 *Buscar Leads Elegíveis* e *Registrar Envio* (validado contra CNPJ inexistente, sem marcar lead real).
+
+Falta a execução real ponta a ponta pelo n8n, que só é possível depois das credenciais conectadas.
+
+## Ajuste pós-teste
+
+Os nós Postgres que fecham os loops do W2 e do W3 (`Gravar Enriquecimento`, `Marcar Enriquecimento com Erro`, `Registrar Envio`, `Registrar Falha de Envio`) ficaram com `alwaysOutputData` ligado: se um `UPDATE ... RETURNING` não casar nenhuma linha, o nó ainda emite um item e o `nextBatch` continua o loop, em vez de a execução parar no meio e o webhook ficar sem resposta.

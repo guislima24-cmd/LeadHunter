@@ -1,10 +1,18 @@
 -- Lead Hunter x Apollo (Prospect AI) - suporte aos workflows n8n
 -- Projeto Supabase: leadhunter (dulpeemmwhudcjqwbolr)
--- Aplicar uma unica vez. Todas as alteracoes sao aditivas (nao apagam nada).
-
-begin;
+--
+-- APLICADO EM 2026-08-18 via Supabase MCP, em 4 migrações:
+--   n8n_pipeline_colunas_leads
+--   n8n_pipeline_tabelas_dedupe_e_emails
+--   n8n_pipeline_indice_cnpj_leads
+--   n8n_pipeline_validar_constraints_leads
+-- Este arquivo é o registro consolidado do que foi aplicado (idempotente).
+-- Tudo é aditivo: nenhuma coluna, tabela ou linha existente foi alterada.
 
 -- 1) Novas colunas na tabela leads -------------------------------------------
+-- leads tem ~1,65M linhas / 350 MB. Adicionar coluna com default é operação de
+-- catálogo no PG 11+; as CHECKs entram como NOT VALID e são validadas depois,
+-- para não segurar lock de escrita durante o scan.
 
 alter table public.leads
   add column if not exists contatado_em            timestamptz,
@@ -24,7 +32,8 @@ alter table public.leads
   drop constraint if exists leads_enriquecimento_status_check;
 alter table public.leads
   add constraint leads_enriquecimento_status_check
-  check (enriquecimento_status is null or enriquecimento_status in ('pendente', 'ok', 'erro'));
+  check (enriquecimento_status is null or enriquecimento_status in ('pendente', 'ok', 'erro'))
+  not valid;
 
 alter table public.leads
   drop constraint if exists leads_etapa_funil_check;
@@ -33,15 +42,17 @@ alter table public.leads
   check (etapa_funil in (
     'novo_lead', 'contatado', 'respondeu', 'reuniao',
     'proposta', 'fechado_ganho', 'fechado_perdido'
-  ));
+  ))
+  not valid;
 
--- O W1 filtra por cnpj, contatado_em, setor, cidade e estado.
-create index if not exists leads_cnpj_idx            on public.leads (cnpj);
-create index if not exists leads_contatado_em_idx    on public.leads (contatado_em);
-create index if not exists leads_setor_cidade_idx    on public.leads (setor, cidade);
-create index if not exists leads_estado_idx          on public.leads (estado);
+alter table public.leads validate constraint leads_enriquecimento_status_check;
+alter table public.leads validate constraint leads_etapa_funil_check;
 
--- 2) Reservas temporarias (dedupe de 24h por filtro) -------------------------
+-- W1/W2/W3 casam leads por cnpj. Os índices de setor, cidade, estado e porte
+-- (idx_setor, idx_cidade, idx_estado, idx_porte) já existiam.
+create index if not exists leads_cnpj_idx on public.leads (cnpj);
+
+-- 2) Reservas temporárias (dedupe de 24h por filtro) -------------------------
 
 create table if not exists public.lead_reservas (
   id            uuid primary key default gen_random_uuid(),
@@ -74,7 +85,7 @@ create table if not exists public.listas_geradas (
 
 create index if not exists listas_geradas_membro_idx on public.listas_geradas (membro, criada_em desc);
 
--- 4) Emails de prospeccao ------------------------------------------------------
+-- 4) Emails de prospecção ------------------------------------------------------
 
 create table if not exists public.emails_enviados (
   id                uuid primary key default gen_random_uuid(),
@@ -91,9 +102,16 @@ create table if not exists public.emails_enviados (
 create index if not exists emails_enviados_lead_cnpj_idx on public.emails_enviados (lead_cnpj);
 create index if not exists emails_enviados_membro_idx    on public.emails_enviados (membro, enviado_em desc);
 
-commit;
+-- 5) RLS nas tabelas novas ------------------------------------------------------
+-- RLS ligado sem policies: as chaves anon/authenticated da API REST não leem nem
+-- escrevem nada nessas tabelas (emails_enviados guarda o corpo dos emails).
+-- O n8n acessa por conexão Postgres direta (role postgres), que ignora RLS.
 
--- 5) Limpeza opcional de reservas expiradas ------------------------------------
--- As reservas expiradas nao atrapalham a consulta do W1 (ela filtra por
+alter table public.lead_reservas   enable row level security;
+alter table public.listas_geradas  enable row level security;
+alter table public.emails_enviados enable row level security;
+
+-- 6) Limpeza opcional de reservas expiradas ------------------------------------
+-- As reservas expiradas não atrapalham a consulta do W1 (ela filtra por
 -- expira_em > now()), mas podem ser removidas periodicamente:
 --   delete from public.lead_reservas where expira_em < now() - interval '7 days';
