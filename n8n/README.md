@@ -15,6 +15,33 @@ Instância: `https://guizo.app.n8n.cloud` (projeto pessoal). Todos os workflows 
 | W5 | LH W5 - Busca Google Maps com IA | `jxcZgqkK7oIPYkQN` | Webhook `POST /webhook/apollo/maps` |
 | W6 | LH W6 - Sync Planilha e Notion | `A8wIagN8job8JwxQ` | Schedule a cada 15 min |
 | W7 | LH W7 - Analise de Funil e Dashboard | `GwcRMRupfARc0Phj` | Schedule diário às 8h |
+| W8 | LH W8 - Migracao Retroativa de ID Sync | `otFxiPJPXSRooYQ4` | Manual (execução única, antes de W4/W6) |
+
+## ⚠️ Descoberta: a planilha real não bate com o schema do PRD
+
+Ao configurar as credenciais, abrimos a planilha real (`1Lp2Yy...wYg`) e as abas de membro **não têm** as colunas que o PRD assumia (`nome`, `empresa`, `cargo`, `linkedin_url`, `etapa_funil`, `id_sync`). Elas têm um funil de KPI comercial próprio, ocupando as colunas A–U:
+
+`Alvo | Mês | Canal | Setor | Empresa contatada | Nome do contato | Número/Link | Quem respondeu? | Data de conexão | Quantos contatos? | Marcou RD? | Data RD | No show? | SQL | Marcou RP? | Data proposta | Contrato? | Data contrato | Motivo da recusa | Ciclo de conversão | Observações`
+
+Isso afetava W4, W6, W7 e W8, que foram **corrigidos** (18–19/08/2026) para essa realidade:
+
+- **`ID_Sync`** vira uma coluna nova **V** (não reaproveita a U, que já é "Observações"). É um pré-requisito manual, único, por aba de membro — ver seção 3 abaixo.
+- **`etapa_funil` deixou de ser uma coluna armazenada.** O W6 agora **deriva** a etapa a cada ciclo a partir do funil de KPI existente, nesta ordem de prioridade:
+  1. `Motivo da recusa` preenchido → `fechado_perdido`
+  2. `Contrato?` = Sim OU `Data contrato` preenchida → `fechado_ganho`
+  3. `Marcou RP?` = Sim OU `Data proposta` preenchida → `proposta`
+  4. `Data RD` preenchida e `No show?` ≠ TRUE → `reuniao`
+  5. `Quem respondeu?` preenchido OU `Marcou RD?` em (Sim/Conversando/Pediu pra retornar/Passou outro contato) → `respondeu`
+  6. `Data de conexão` preenchida → `contatado`
+  7. Nenhum dos anteriores → `novo_lead`
+
+  Essa lógica foi construída lendo os valores reais de cada coluna na planilha (não é um mapeamento adivinhado) — ver `n8n/README.md` git blame ou o sticky note do W6 para o detalhe.
+- **Sincronização de etapa passou a ser só planilha → Notion.** Como a etapa é sempre recalculada da planilha, mudar a etapa direto no Notion não volta mais pra planilha (não há onde gravar isso sem reescrever o funil de KPI manual do time). A branch `atualizar_na_planilha` e o nó correspondente foram removidos do W6.
+- **W4** (captura LinkedIn) escreve em `Empresa contatada`, `Nome do contato`, `Número/Link` (guarda a URL do LinkedIn), `Canal`="LinkedIn", `Data de conexão`=hoje. `cargo` não tem coluna própria — vira texto em `Observações` ("Cargo: ..."). `Alvo`/`Setor`/resto do funil ficam em branco para o time preencher.
+- **W8** simplificou: só gera e grava `ID_Sync`; não mexe mais em etapa (não há mais o que escrever ali).
+- **Bug de parsing corrigido durante o teste**: as datas da planilha são `DD/MM/AAAA`, mas `Date.parse()` do JS lê como `MM/DD/AAAA` (americano) e troca dia/mês em silêncio sempre que o dia é ≤ 12. O W6 usa agora um parser manual para esse formato.
+
+**Pendente:** W5 (`MAPS`/`MAPS_USAGE`/`MAPS_MEMORY`) muito provavelmente tem o mesmo problema — vimos cabeçalhos reais diferentes dos que o W5 usa hoje (ex.: `MAPS_MEMORY` real parece ser `Filtro Hash | Setor | Cidade | Último Offset | Última Busca | Total Empresas Coletadas | Membro`, não os nomes em inglês que o W5 escreve). Ainda não corrigido.
 
 ## Contratos dos webhooks
 
@@ -93,12 +120,13 @@ Nenhuma credencial existia na instância, então cada nó autenticado está com 
 A conexão com o Postgres do Supabase usa o **pooler**: host `aws-…pooler.supabase.com`, porta `6543` (ou `5432` na conexão direta), database `postgres`, usuário `postgres.dulpeemmwhudcjqwbolr`, SSL habilitado. A senha é a do banco (Settings → Database), não a service role key.
 
 ### 3. Planilha e Notion
-- Selecionar a planilha comercial real nos nós Google Sheets (todos estão com o seletor "From list" vazio e o rótulo `Planilha Comercial Prospect AI`).
-- Conferir os cabeçalhos usados no mapeamento das abas por membro: `nome`, `empresa`, `cargo`, `linkedin_url`, `origem`, `data_captura`, `membro`, `etapa_funil`, `etapa_atualizada_em`, `id_sync`. Colunas não mapeadas (preenchidas à mão) nunca são tocadas.
-- Abas usadas pelo W5: `MAPS`, `MAPS_USAGE` (`data`, `tipo`, `empresa`, `cidade`, `setor`, `membro`, `custo_usd`) e `MAPS_MEMORY` (`filtro_hash`, `setor`, `cidade`, `last_offset`, `total_coletado`, `ultima_busca`).
-- Aba `Dashboard` (W7): `etapa`, `quantidade_atual`, `taxa_conversao`, `tempo_medio_dias`, `total_leads`, `atualizado_em`.
+- Documento já apontado direto pelo ID real (`1Lp2Yy_j1SKducGIDXfWpviXxxpao-m_JHjSI3Z5_wYg`) nos nós de W4/W6/W8 — não precisa selecionar na UI.
+- **Pré-requisito manual, uma vez por aba de membro:** adicionar o cabeçalho `ID_Sync` na célula **V1**. Sem isso, W4/W6/W8 dão erro "Nenhuma coluna encontrada" ao tentar gravar. Colunas A–U (o funil de KPI existente) não são tocadas.
+- Cabeçalhos reais das abas de membro (ver seção "Descoberta" acima) — W4/W6/W8 já usam esses nomes exatos.
+- ⚠️ **Abas usadas pelo W5** (`MAPS`, `MAPS_USAGE`, `MAPS_MEMORY`) — ainda usam os nomes de coluna do PRD original (em inglês/genéricos), que **provavelmente não batem** com os cabeçalhos reais dessas abas (não corrigido ainda, ver seção "Descoberta").
+- Aba `Dashboard` (W7): `etapa`, `quantidade_atual`, `taxa_conversao`, `tempo_medio_dias`, `total_leads`, `atualizado_em` — aba nova, ainda não existe na planilha, o W7 cria ao rodar.
 - Notion: criar as databases `Pipeline Comercial` e `Dashboard Funil` com as propriedades da Seção 3 do PRD, compartilhar com a integração, e selecionar as data sources nos nós. O `Dashboard Funil` ganhou uma propriedade extra `Observações IA` (rich text) para as observações do agente.
-- No W6, editar a constante `ABAS_DE_MEMBRO` no nó *Separar Abas de Membro* com os nomes reais das abas.
+- No W6 e no W8, editar a constante `ABAS_DE_MEMBRO` no nó *Separar Abas de Membro* com os nomes reais das abas.
 
 ### 4. Front-ends
 Trocar as chamadas diretas pelos webhooks: `/api/search` → W1, botão "Prospectar via email" → W3, `/api/agent/start-maps` → W5, e a extensão Chrome passa a dar `fetch` no webhook do W4.
@@ -119,8 +147,10 @@ Trocar as chamadas diretas pelos webhooks: `/api/search` → W1, botão "Prospec
 
 Executados com pin data (sem tocar em serviço externo):
 - W1: 4 candidatos → 2 disponíveis, 1 bloqueado por contato, 1 por reserva; `filtro_hash` e payload da resposta corretos.
-- W6: as três ações (`criar_no_notion`, `atualizar_no_notion`, `atualizar_na_planilha`) roteadas corretamente pelo comparador de timestamps.
+- W4: `Resolver ID Sync` casou a linha existente por `Número/Link`, preservou o `ID_Sync`, formatou a data em `DD/MM/AAAA` e anexou o cargo em `Observações`.
+- W6: com dados no formato real da planilha, as 7 regras de derivação de etapa (`fechado_perdido` → `fechado_ganho` → `proposta` → `reuniao` → `respondeu` → `contatado` → `novo_lead`) e as ações `criar_no_notion`/`atualizar_no_notion`/`nada` conferidas linha a linha, incluindo o caso de `No show?`=TRUE não avançar para `reuniao`. Achado e corrigido nesse teste: `Date.parse()` trocava dia/mês nas datas `DD/MM/AAAA`.
 - W7: métricas por etapa conferidas (quantidade, acumulado, taxa de conversão em cascata, tempo médio, etapas terminais sem tempo médio).
+- W8: pulou a linha já migrada, ignorou a linha totalmente vazia e gerou `ID_Sync` só nas linhas com conteúdo real.
 
 No banco real (Supabase), com literais no lugar dos parâmetros:
 - W1 *Buscar Candidatos* e *Registrar Lista e Reservas* (lista + 2 reservas criadas e depois removidas).
