@@ -16,6 +16,7 @@ Instância: `https://guizo.app.n8n.cloud` (projeto pessoal). Todos os workflows 
 | W6 | LH W6 - Sync Planilha e Notion | `A8wIagN8job8JwxQ` | Schedule a cada 15 min |
 | W7 | LH W7 - Analise de Funil e Dashboard | `GwcRMRupfARc0Phj` | Schedule diário às 8h |
 | W8 | LH W8 - Migracao Retroativa de ID Sync | `otFxiPJPXSRooYQ4` | Manual (execução única, antes de W4/W6) |
+| W9 | LH W9 - Tratamento Central de Falhas | `rJGKkgi2uSwjkaIj` | Error Trigger (**publicado**) — dispara quando W1–W8 falham |
 
 ## ⚠️ Descoberta: a planilha real não bate com o schema do PRD
 
@@ -41,7 +42,27 @@ Isso afetava W4, W6, W7 e W8, que foram **corrigidos** (18–19/08/2026) para es
 - **W8** simplificou: só gera e grava `ID_Sync`; não mexe mais em etapa (não há mais o que escrever ali).
 - **Bug de parsing corrigido durante o teste**: as datas da planilha são `DD/MM/AAAA`, mas `Date.parse()` do JS lê como `MM/DD/AAAA` (americano) e troca dia/mês em silêncio sempre que o dia é ≤ 12. O W6 usa agora um parser manual para esse formato.
 
-**Pendente:** W5 (`MAPS`/`MAPS_USAGE`/`MAPS_MEMORY`) muito provavelmente tem o mesmo problema — vimos cabeçalhos reais diferentes dos que o W5 usa hoje (ex.: `MAPS_MEMORY` real parece ser `Filtro Hash | Setor | Cidade | Último Offset | Última Busca | Total Empresas Coletadas | Membro`, não os nomes em inglês que o W5 escreve). Ainda não corrigido.
+### W5 também estava quebrado — corrigido em 19/08/2026
+
+Exportando a planilha como xlsx deu para ler os nomes reais das abas e cabeçalhos. O W5 tinha **dois problemas independentes**, ambos corrigidos:
+
+1. **Bug crítico de aba errada**: o nó *Ler Memoria de Paginacao* apontava para a aba `Leads Maps` em vez de `Maps Memory`. O offset nunca era recuperado, então toda busca recomeçaria da primeira página — quebrando a memória de paginação que o PRD manda preservar.
+2. **Nomes de aba e coluna inventados**: o W5 usava `MAPS`/`MAPS_USAGE`/`MAPS_MEMORY` com colunas em snake_case. Os nomes reais são:
+   - `Leads Maps`: Data | Empresa | Setor | Cidade | Endereço | Telefone BR | Telefone Internacional | Site | Horário | Potencial IA | Justificativa | Dores Típicas | Serviços Sugeridos | Melhor Canal | Melhor Horário | Argumento de Abertura | Status | Membro
+   - `Maps Memory`: Filtro Hash | Setor | Cidade | Último Offset | Última Busca | Total Empresas Coletadas | Membro
+   - `Maps Usage`: Data | Mês/Ano | Tipo Chamada | Custo Estimado USD | Custo Acumulado Mês | Empresa Pesquisada | Membro
+
+Consequências das correções:
+- **Dedupe** agora casa por `Empresa` + `Cidade` (a aba não tem coluna `chave_dedupe`).
+- **Orçamento** filtra pela coluna `Mês/Ano` (formato `8/2026`), não por parsing de data, e alimenta o `Custo Acumulado Mês` linha a linha.
+- **`crypto` não existe no Code node** do n8n Cloud — `crypto.subtle.digest` quebrava a execução na primeira linha. Substituído por SHA-1 em JS puro, **validado contra o hash real já gravado na aba** (`094547f9…` para `indústria química|são paulo`), contra os vetores padrão do SHA-1 e contra o `hashlib` do Python. Isso garante que a memória de paginação existente continue casando em vez de gerar hashes novos.
+- Dados que o Places retorna mas não têm coluna (nota, nº de avaliações, `place_id`, status do negócio) alimentam o prompt da IA, mas não são gravados.
+
+### Abas reais da planilha "Prospecção - Vendas"
+
+12 abas de membro: `Anna`, `Daniel`, `Duda`, `Felipe`, `Gui Lima`, `Gui Midolli`, `Gustavo`, `Larissa`, `Léo`, `Letícia`, `Tiago`, `Caio Sperandio` — já configuradas no W6 e no W8.
+
+⚠️ A aba `Caio Sperandio` tem um cabeçalho ligeiramente diferente (`Alvo (KPI)` em vez de `Alvo`, e **sem a coluna `Observações`**). W6 e W8 funcionam nela normalmente (só leem colunas que existem em ambas), mas o **W4 falharia** ao tentar escrever em `Observações` nessa aba específica.
 
 ## Contratos dos webhooks
 
@@ -104,8 +125,8 @@ Ao responder, o W1 dispara o W2 (enriquecimento) sem esperar o resultado.
 
 ⚠️ **Formato do CNPJ**: a coluna `leads.cnpj` guarda o valor formatado (`06.370.174/0003-94`), não só dígitos. O dedupe e o casamento entre W1/W2/W3 usam sempre esse mesmo valor, mas qualquer integração externa precisa respeitar o formato.
 
-### 2. Credenciais a conectar na UI do n8n
-Nenhuma credencial existia na instância, então cada nó autenticado está com o slot vazio.
+### 2. Credenciais a conectar na UI do n8n — ✅ já conectadas
+As sete credenciais abaixo já foram criadas na instância e vinculadas aos nós (auditado em 19/08/2026: nenhum nó autenticado ficou com o slot vazio).
 
 | Credencial | Tipo n8n | Usada em |
 |---|---|---|
@@ -120,13 +141,17 @@ Nenhuma credencial existia na instância, então cada nó autenticado está com 
 A conexão com o Postgres do Supabase usa o **pooler**: host `aws-…pooler.supabase.com`, porta `6543` (ou `5432` na conexão direta), database `postgres`, usuário `postgres.dulpeemmwhudcjqwbolr`, SSL habilitado. A senha é a do banco (Settings → Database), não a service role key.
 
 ### 3. Planilha e Notion
-- Documento já apontado direto pelo ID real (`1Lp2Yy_j1SKducGIDXfWpviXxxpao-m_JHjSI3Z5_wYg`) nos nós de W4/W6/W8 — não precisa selecionar na UI.
-- **Pré-requisito manual, uma vez por aba de membro:** adicionar o cabeçalho `ID_Sync` na célula **V1**. Sem isso, W4/W6/W8 dão erro "Nenhuma coluna encontrada" ao tentar gravar. Colunas A–U (o funil de KPI existente) não são tocadas.
-- Cabeçalhos reais das abas de membro (ver seção "Descoberta" acima) — W4/W6/W8 já usam esses nomes exatos.
-- ⚠️ **Abas usadas pelo W5** (`MAPS`, `MAPS_USAGE`, `MAPS_MEMORY`) — ainda usam os nomes de coluna do PRD original (em inglês/genéricos), que **provavelmente não batem** com os cabeçalhos reais dessas abas (não corrigido ainda, ver seção "Descoberta").
-- Aba `Dashboard` (W7): `etapa`, `quantidade_atual`, `taxa_conversao`, `tempo_medio_dias`, `total_leads`, `atualizado_em` — aba nova, ainda não existe na planilha, o W7 cria ao rodar.
-- Notion: criar as databases `Pipeline Comercial` e `Dashboard Funil` com as propriedades da Seção 3 do PRD, compartilhar com a integração, e selecionar as data sources nos nós. O `Dashboard Funil` ganhou uma propriedade extra `Observações IA` (rich text) para as observações do agente.
-- No W6 e no W8, editar a constante `ABAS_DE_MEMBRO` no nó *Separar Abas de Membro* com os nomes reais das abas.
+- Documento já apontado direto pelo ID real (`1Lp2Yy_j1SKducGIDXfWpviXxxpao-m_JHjSI3Z5_wYg`) nos nós de W4/W5/W6/W7/W8 — não precisa selecionar na UI.
+- Os 12 nomes reais de aba de membro já estão preenchidos na constante `ABAS_DE_MEMBRO` do nó *Separar Abas de Membro* (W6 e W8). ✅
+- Abas do W5 (`Leads Maps`, `Maps Memory`, `Maps Usage`) já usam os cabeçalhos reais. ✅
+
+Ainda **falta fazer na mão**, uma vez:
+
+1. **`ID_Sync` na célula V1** de cada aba de membro. Sem isso, W4/W6/W8 dão erro "Nenhuma coluna encontrada" ao tentar gravar. Colunas A–U (o funil de KPI existente) não são tocadas.
+2. **`Contexto Web` na célula S1** da aba `Leads Maps` — é onde o W5 grava o resumo da pesquisa Tavily. Sem o cabeçalho, a coluna é ignorada em silêncio.
+3. **Criar a aba `Dashboard`** com os cabeçalhos `etapa | quantidade_atual | taxa_conversao | tempo_medio_dias | total_leads | atualizado_em`. O nó do W7 grava numa aba existente, **não cria a aba** — sem ela o W7 falha na primeira execução.
+4. **Notion**: criar as databases `Pipeline Comercial` e `Dashboard Funil` com as propriedades da Seção 3 do PRD, compartilhar com a integração e **selecionar as data sources** nos nós de W6 e W7 (a credencial está conectada, mas a database em si precisa ser escolhida). O `Dashboard Funil` ganhou uma propriedade extra `Observações IA` (rich text) para as observações do agente.
+5. **Destinatário do alerta do W9** (campo *To* do nó *Avisar o Responsavel*).
 
 ### 4. Front-ends
 Trocar as chamadas diretas pelos webhooks: `/api/search` → W1, botão "Prospectar via email" → W3, `/api/agent/start-maps` → W5, e a extensão Chrome passa a dar `fetch` no webhook do W4.
@@ -137,11 +162,33 @@ Trocar as chamadas diretas pelos webhooks: `/api/search` → W1, botão "Prospec
 - **`filtro_hash`**: `sha1(setor|cidade)` normalizado (minúsculo, sem espaços nas pontas), igual ao `getFilterHash` do Apollo. No W1 é calculado por expressão n8n (`.hash("sha1")`) e no W5 por `crypto.subtle` no Code node — os dois produzem o mesmo hex.
 - **Busca do W1 varre 3× a quantidade pedida** e filtra os bloqueados em memória, para não pagar o `COUNT` que já causava timeout no `/api/search`.
 - **Rate limit do Gemini**: W2 e W3 processam em série com `Wait` de 5 s (≈12 RPM, abaixo dos 15 do free tier); no W5 o agente usa `batching` com 4,5 s entre itens.
-- **Orçamento do Maps**: o W5 relê `MAPS_USAGE` antes de **cada cidade** e para em US$ 150 (aviso em US$ 100), com a mesma mensagem de hoje. Os custos por chamada (`0.032` text search / `0.017` place details) estão no nó *Montar Linhas de Uso* — ajuste lá se a tabela de preços mudar.
-- **Paginação do Places**: usa a paginação nativa do nó HTTP (até 5 páginas de 20), e o `last_offset` de `MAPS_MEMORY` pula o que já foi coletado, com reset após 60 dias.
+- **Orçamento do Maps**: o W5 relê `Maps Usage` antes de **cada cidade** e para em US$ 150 (aviso em US$ 100), com a mesma mensagem de hoje. Os custos por chamada (`0.032` text search / `0.017` place details) estão no nó *Montar Linhas de Uso* — ajuste lá se a tabela de preços mudar.
+- **Paginação do Places**: usa a paginação nativa do nó HTTP (até 5 páginas de 20), e o `Último Offset` de `Maps Memory` pula o que já foi coletado, com reset após 60 dias.
 - **Gmail no modo institucional**: uma credencial única para todos. Para o modo individual, duplicar o nó Gmail por membro e colocar um Switch por `membro` antes dele — está anotado no sticky do W3.
 - **Modelo Gemini**: `models/gemini-2.0-flash-lite`, como no PRD. O n8n recomenda modelos mais novos; se a API recusar o 2.0, é trocar no dropdown dos nós de modelo.
 - **Sync sem cursor**: o W6 compara `etapa_atualizada_em` (planilha) com `Data Última Atualização Etapa` (Notion) e vence o mais recente — não precisa guardar timestamp da última execução.
+
+## Trava de orçamento da Tavily (W2)
+
+Implementa o "contador de uso + bloqueio preventivo" que a seção 5 do PRD pede, no mesmo padrão do Maps.
+
+Antes de **cada lead**, o nó *Checar Cota Tavily* soma o consumo do mês corrente na tabela `tavily_uso`. Se não couber mais um lead dentro do limite, o lead recebe `enriquecimento_status = 'pendente'` e o loop segue — o agente com Tavily nem chega a ser invocado. Cada lead enriquecido grava seu consumo.
+
+Os dois números ficam no SQL do próprio nó, fáceis de ajustar:
+- `limite_mes` = 1000 (free tier da Tavily)
+- `creditos_por_lead` = 6 (até 3 buscas × 2 créditos da busca `advanced`)
+
+É uma **estimativa conservadora**, não a contagem exata de chamadas — o agente decide quantas buscas faz. Por ser conservadora, ela bloqueia antes de estourar, não depois. Leads marcados como `pendente` podem ser reenriquecidos rodando o W2 de novo com o mesmo `lista_id` quando a cota renovar.
+
+## Tratamento central de falhas (W9)
+
+Único workflow **publicado**. Não roda sozinho: o n8n o dispara automaticamente quando qualquer um dos outros oito falha em produção (já configurado como *Error Workflow* de W1 a W8).
+
+A cada falha: normaliza o evento (o nome do nó vem de `error.node.name` ou de `lastNodeExecuted`, conforme o tipo de falha), grava em `n8n_erros` no Supabase e envia um email com link direto para a execução que quebrou. Gravação e email são independentes — se o email falhar, o log continua.
+
+⚠️ **Falta preencher o destinatário** no campo *To* do nó *Avisar o Responsavel*. Enquanto estiver vazio, o log no Supabase funciona mas o email não sai.
+
+Só dispara em execuções de produção; testes manuais no editor não acionam.
 
 ## Testes já feitos
 
@@ -151,13 +198,16 @@ Executados com pin data (sem tocar em serviço externo):
 - W6: com dados no formato real da planilha, as 7 regras de derivação de etapa (`fechado_perdido` → `fechado_ganho` → `proposta` → `reuniao` → `respondeu` → `contatado` → `novo_lead`) e as ações `criar_no_notion`/`atualizar_no_notion`/`nada` conferidas linha a linha, incluindo o caso de `No show?`=TRUE não avançar para `reuniao`. Achado e corrigido nesse teste: `Date.parse()` trocava dia/mês nas datas `DD/MM/AAAA`.
 - W7: métricas por etapa conferidas (quantidade, acumulado, taxa de conversão em cascata, tempo médio, etapas terminais sem tempo médio).
 - W8: pulou a linha já migrada, ignorou a linha totalmente vazia e gerou `ID_Sync` só nas linhas com conteúdo real.
+- W5 (após as correções): `filtro_hash` bateu com a linha real de `Maps Memory` → offset recuperado e aplicado; dedupe pulou a empresa já existente; orçamento somou só o mês corrente (excluiu corretamente uma linha de US$ 99 de julho); custo acumulado somou linha a linha.
+- W2 (trava da Tavily): com a cota estourada, os dois leads foram para `pendente` **sem invocar Gemini/Tavily**; com cota livre, o lead passou pelo agente e o consumo foi registrado.
+- W9: normalização do evento de erro conferida (workflow, nó, mensagem, id e URL da execução extraídos corretamente).
 
 No banco real (Supabase), com literais no lugar dos parâmetros:
 - W1 *Buscar Candidatos* e *Registrar Lista e Reservas* (lista + 2 reservas criadas e depois removidas).
 - W2 *Buscar Leads da Lista* (join por `cnpj = any(lead_cnpjs)`).
 - W3 *Buscar Leads Elegíveis* e *Registrar Envio* (validado contra CNPJ inexistente, sem marcar lead real).
 
-Falta a execução real ponta a ponta pelo n8n, que só é possível depois das credenciais conectadas.
+Falta a execução real ponta a ponta pelo n8n, que depende dos pré-requisitos manuais da planilha e do Notion (seção 3).
 
 ## Ajuste pós-teste
 

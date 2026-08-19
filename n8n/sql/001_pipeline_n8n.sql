@@ -115,3 +115,44 @@ alter table public.emails_enviados enable row level security;
 -- As reservas expiradas não atrapalham a consulta do W1 (ela filtra por
 -- expira_em > now()), mas podem ser removidas periodicamente:
 --   delete from public.lead_reservas where expira_em < now() - interval '7 days';
+
+-- =============================================================================
+-- Migração 2 (aplicada em 19/08/2026 como `n8n_tavily_uso_e_erros`)
+-- Tabelas de apoio dos workflows W2 (trava de orçamento) e W9 (log de falhas).
+-- =============================================================================
+
+-- Contador de uso da Tavily (trava de orçamento do W2, seção 5 do PRD).
+create table if not exists public.tavily_uso (
+  id                  uuid primary key default gen_random_uuid(),
+  workflow            text        not null,
+  membro              text,
+  referencia          text,
+  creditos_estimados  int         not null default 0,
+  criado_em           timestamptz not null default now()
+);
+
+create index if not exists tavily_uso_criado_em_idx on public.tavily_uso (criado_em desc);
+
+-- Log central de falhas de produção dos workflows (W9).
+create table if not exists public.n8n_erros (
+  id             uuid primary key default gen_random_uuid(),
+  workflow_id    text,
+  workflow_nome  text,
+  execucao_id    text,
+  no_com_erro    text,
+  mensagem       text,
+  detalhe        jsonb,
+  ocorrido_em    timestamptz not null default now()
+);
+
+create index if not exists n8n_erros_ocorrido_em_idx on public.n8n_erros (ocorrido_em desc);
+create index if not exists n8n_erros_workflow_idx    on public.n8n_erros (workflow_nome, ocorrido_em desc);
+
+alter table public.tavily_uso enable row level security;
+alter table public.n8n_erros  enable row level security;
+
+-- Consultas úteis:
+--   -- Consumo da Tavily no mês corrente
+--   select sum(creditos_estimados) from tavily_uso where criado_em >= date_trunc('month', now());
+--   -- Últimas falhas
+--   select ocorrido_em, workflow_nome, no_com_erro, mensagem from n8n_erros order by ocorrido_em desc limit 50;
