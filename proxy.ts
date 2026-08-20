@@ -49,6 +49,16 @@ export async function proxy(request: NextRequest) {
     (rota) => caminho === rota || caminho.startsWith(`${rota}/`),
   )
 
+  // O Supabase manda o código do OAuth para a raiz quando o `redirectTo` que
+  // pedimos não está na lista de Redirect URLs — ele cai no Site URL, que não
+  // tem o caminho `/auth/callback`. Encaminhar aqui faz o login concluir mesmo
+  // nesse caso, em vez de o código ser descartado e o usuário voltar ao login.
+  if (!user && caminho === '/' && request.nextUrl.searchParams.has('code')) {
+    const destino = request.nextUrl.clone()
+    destino.pathname = '/auth/callback'
+    return NextResponse.redirect(destino)
+  }
+
   if (!user && !ehPublica) {
     // Chamada de API recebe JSON, não redirecionamento: um 307 para /login
     // devolveria HTML no meio de um `fetch`, e o `res.json()` da tela
