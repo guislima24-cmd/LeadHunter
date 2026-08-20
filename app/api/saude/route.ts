@@ -15,6 +15,36 @@ interface Checagem {
   detalhe?: string
 }
 
+/**
+ * Identifica **que tipo** de chave foi configurada, sem revelar o valor.
+ *
+ * O engano mais comum é colar a chave `anon` (ou uma `publishable`) no lugar
+ * da `service_role`. As duas parecem iguais a olho nu, e a mensagem de erro
+ * do PostgREST não diz qual veio.
+ */
+function diagnosticarChave(): { formato: string; papelDeclarado: string | null } {
+  const chave = process.env.SUPABASE_SERVICE_ROLE_KEY
+  if (!chave) return { formato: 'ausente', papelDeclarado: null }
+
+  if (chave.startsWith('sb_secret_')) return { formato: 'sb_secret', papelDeclarado: 'service_role' }
+  if (chave.startsWith('sb_publishable_')) return { formato: 'sb_publishable', papelDeclarado: 'anon' }
+
+  // Chave legada: é um JWT, e o payload traz o papel em claro.
+  const partes = chave.split('.')
+  if (partes.length !== 3) {
+    return { formato: 'irreconhecivel', papelDeclarado: null }
+  }
+
+  try {
+    const payload = JSON.parse(
+      Buffer.from(partes[1], 'base64url').toString('utf8'),
+    ) as { role?: string }
+    return { formato: 'jwt', papelDeclarado: payload.role ?? null }
+  } catch {
+    return { formato: 'jwt_ilegivel', papelDeclarado: null }
+  }
+}
+
 async function checarBanco(): Promise<Checagem> {
   try {
     const db = criarClienteAdmin()
@@ -25,7 +55,11 @@ async function checarBanco(): Promise<Checagem> {
 
     if (error) {
       const partes = [error.message, error.hint, error.code].filter(Boolean)
-      return { ok: false, detalhe: partes.join(' · ') || 'erro sem detalhe' }
+      const detalhe = partes.join(' · ') || 'erro sem detalhe'
+      // Também no log da Vercel: é por onde se investiga quando a resposta
+      // da rota não está acessível (proteção de deployment ligada, p. ex.).
+      console.error('[saude] falha no banco:', detalhe, diagnosticarChave())
+      return { ok: false, detalhe }
     }
     return { ok: true }
   } catch (erro) {
@@ -96,6 +130,7 @@ export async function GET() {
       opcionais,
       banco,
       google,
+      chaveServico: diagnosticarChave(),
       verificadoEm: new Date().toISOString(),
     },
     { status: tudoOk ? 200 : 503 },
