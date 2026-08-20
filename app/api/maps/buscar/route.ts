@@ -9,6 +9,9 @@ interface RespostaW5 {
   mensagem_orcamento: string
   total_acumulado_por_filtro: number
   concluido_em: string
+  /** O W5 marca aqui quando o Google Places recusou a chamada. */
+  erro_api?: boolean
+  mensagem_api?: string
 }
 
 const MAX_CIDADES = 10
@@ -70,6 +73,21 @@ export async function POST(req: NextRequest) {
         detalhe: resultado.detalhe,
       },
       { status: resultado.status },
+    )
+  }
+
+  // O W5 responde 200 mesmo quando o Places falha, para nao perder o que as
+  // outras cidades trouxeram. Sem tratar aqui, uma chave sem permissao apareceria
+  // na tela como "0 empresas" — silencio no lugar de erro.
+  if (resultado.dados.erro_api) {
+    return Response.json(
+      {
+        erro: 'places_recusou',
+        mensagem:
+          'O Google Places recusou a busca. Confira se a Places API (New) está habilitada no Google Cloud e se a chave não tem restrição de IP ou de referenciador.',
+        detalhe: resultado.dados.mensagem_api ?? '',
+      },
+      { status: 502 },
     )
   }
 
