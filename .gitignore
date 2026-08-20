@@ -1,4 +1,8 @@
+.env
 .env.local
 .env*.local
 node_modules/
 .next/
+
+# Artefatos de build do TypeScript
+*.tsbuildinfo

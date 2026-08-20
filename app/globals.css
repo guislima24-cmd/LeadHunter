@@ -1,31 +1,142 @@
-@import url('https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;1,9..40,300&display=swap');
+@import 'tailwindcss';
 
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+/* ==========================================================================
+   Sistema de design — UFABC Júnior
+   Paleta institucional: verde, amarelo, branco e preto.
+   Tokens expostos como utilitários do Tailwind v4 via @theme.
+   ========================================================================== */
+@theme {
+  /* Verde institucional — cor primária de ação */
+  --color-verde-50:  #e9f8ef;
+  --color-verde-100: #c8ecd7;
+  --color-verde-200: #95dab4;
+  --color-verde-300: #5fc48d;
+  --color-verde-400: #2fae6b;
+  --color-verde-500: #12984f;
+  --color-verde-600: #0b7a3b;
+  --color-verde-700: #095f2f;
+  --color-verde-800: #074524;
+  --color-verde-900: #042c17;
 
-:root {
-  --bg: #0a0a0a;
-  --bg-card: #111111;
-  --border: #222222;
-  --accent: #f0c040;
-  --text-primary: #f5f5f5;
-  --text-secondary: #888888;
-  --text-muted: #555555;
-  --green: #22c55e;
-  --red: #ef4444;
-  --blue: #3b82f6;
+  /* Amarelo institucional — destaque e sinalização */
+  --color-amarelo-50:  #fff9e6;
+  --color-amarelo-100: #ffefb8;
+  --color-amarelo-200: #ffe383;
+  --color-amarelo-300: #ffd64d;
+  --color-amarelo-400: #ffc81f;
+  --color-amarelo-500: #f5b800;
+  --color-amarelo-600: #c99400;
+  --color-amarelo-700: #9c7200;
+
+  /* Neutros — do branco ao preto */
+  --color-tinta-0:   #ffffff;
+  --color-tinta-50:  #f7f8f7;
+  --color-tinta-100: #eef0ee;
+  --color-tinta-200: #dfe2df;
+  --color-tinta-300: #c3c8c4;
+  --color-tinta-400: #939a95;
+  --color-tinta-500: #6b736d;
+  --color-tinta-600: #4d544f;
+  --color-tinta-700: #343a36;
+  --color-tinta-800: #1f2421;
+  --color-tinta-900: #121614;
+  --color-tinta-950: #0a0c0b;
+
+  /* Estados */
+  --color-perigo-50:  #fdecec;
+  --color-perigo-100: #f9d0d0;
+  --color-perigo-500: #dc2626;
+  --color-perigo-600: #b91c1c;
+  --color-perigo-700: #991b1b;
+  --color-info-50:    #eaf2fd;
+  --color-info-100:   #cfe0fa;
+  --color-info-500:   #2563eb;
+  --color-info-700:   #1d4ed8;
+
+  /* Tipografia — famílias injetadas pelo next/font no layout raiz */
+  --font-titulo: var(--fonte-titulo), ui-sans-serif, system-ui, sans-serif;
+  --font-corpo:  var(--fonte-corpo), ui-sans-serif, system-ui, sans-serif;
+
+  /* Sombras discretas — a hierarquia vem da borda, não do drop shadow */
+  --shadow-cartao: 0 1px 2px rgb(10 12 11 / 0.04), 0 1px 3px rgb(10 12 11 / 0.06);
+  --shadow-flutuante: 0 4px 12px rgb(10 12 11 / 0.08), 0 12px 32px rgb(10 12 11 / 0.10);
+
+  --radius-cartao: 0.75rem;
 }
 
-* { box-sizing: border-box; margin: 0; padding: 0; }
-html { background: var(--bg); color: var(--text-primary); font-family: 'DM Sans', sans-serif; -webkit-font-smoothing: antialiased; }
-body { min-height: 100vh; }
-h1, h2, h3, h4 { font-family: 'Syne', sans-serif; }
-::-webkit-scrollbar { width: 6px; height: 6px; }
-::-webkit-scrollbar-track { background: var(--bg); }
-::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+@layer base {
+  * {
+    border-color: var(--color-tinta-200);
+  }
 
-@keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
-.fade-in { animation: fadeIn 0.3s ease forwards; }
-@keyframes spin { to { transform: rotate(360deg); } }
-.spinner { width: 16px; height: 16px; border: 2px solid var(--border); border-top-color: var(--accent); border-radius: 50%; animation: spin 0.7s linear infinite; display: inline-block; }
+  html {
+    -webkit-text-size-adjust: 100%;
+  }
+
+  body {
+    background-color: var(--color-tinta-50);
+    color: var(--color-tinta-800);
+    font-family: var(--font-corpo);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  h1, h2, h3, h4, h5 {
+    font-family: var(--font-titulo);
+    color: var(--color-tinta-900);
+    letter-spacing: -0.015em;
+  }
+
+  /* Foco visível e consistente em toda a plataforma */
+  :focus-visible {
+    outline: 2px solid var(--color-verde-600);
+    outline-offset: 2px;
+    border-radius: 0.375rem;
+  }
+
+  ::selection {
+    background-color: var(--color-amarelo-200);
+    color: var(--color-tinta-900);
+  }
+
+  /* Números tabulares deixam colunas de métricas alinhadas */
+  .numerico {
+    font-variant-numeric: tabular-nums;
+  }
+}
+
+@layer utilities {
+  /* Barra de rolagem discreta nas áreas com overflow */
+  .rolagem-fina {
+    scrollbar-width: thin;
+    scrollbar-color: var(--color-tinta-300) transparent;
+  }
+  .rolagem-fina::-webkit-scrollbar { width: 8px; height: 8px; }
+  .rolagem-fina::-webkit-scrollbar-track { background: transparent; }
+  .rolagem-fina::-webkit-scrollbar-thumb {
+    background: var(--color-tinta-300);
+    border-radius: 999px;
+    border: 2px solid transparent;
+    background-clip: content-box;
+  }
+
+  .surgir { animation: surgir 0.24s ease-out both; }
+  @keyframes surgir {
+    from { opacity: 0; transform: translateY(6px); }
+    to   { opacity: 1; transform: none; }
+  }
+
+  .pulsar { animation: pulsar 1.6s ease-in-out infinite; }
+  @keyframes pulsar {
+    0%, 100% { opacity: 1; }
+    50%      { opacity: 0.45; }
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
