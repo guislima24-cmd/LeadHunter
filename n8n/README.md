@@ -190,6 +190,22 @@ A cada falha: normaliza o evento (o nome do nó vem de `error.node.name` ou de `
 
 Só dispara em execuções de produção; testes manuais no editor não acionam.
 
+## Integração com a plataforma web
+
+Desde 20/08/2026 os workflows são disparados pela plataforma (`/buscar`,
+`/listas/[id]`, `/maps`) em vez de chamadas soltas. Duas consequências:
+
+- **O campo `membro` vem da sessão**, não do corpo da requisição. A plataforma
+  resolve email do Google → aba da planilha (`member_profiles.aba_planilha`) e
+  injeta o valor no servidor, então ninguém dispara automação em nome de outro.
+- **O W7 ganhou um ramo novo** (`Montar Metricas para o Supabase` →
+  `Gravar Metricas no Supabase`), paralelo à gravação no Notion/planilha. Ele
+  grava uma fotografia das métricas na tabela `funil_metricas` do Supabase, que
+  é o que a tela `/pipeline` lê. Fica em paralelo de propósito: a gravação
+  acontece mesmo se o Notion falhar.
+
+Os webhooks continuam funcionando sozinhos — nada impede chamá-los direto.
+
 ## Testes já feitos
 
 Executados com pin data (sem tocar em serviço externo):
@@ -201,6 +217,7 @@ Executados com pin data (sem tocar em serviço externo):
 - W5 (após as correções): `filtro_hash` bateu com a linha real de `Maps Memory` → offset recuperado e aplicado; dedupe pulou a empresa já existente; orçamento somou só o mês corrente (excluiu corretamente uma linha de US$ 99 de julho); custo acumulado somou linha a linha.
 - W2 (trava da Tavily): com a cota estourada, os dois leads foram para `pendente` **sem invocar Gemini/Tavily**; com cota livre, o lead passou pelo agente e o consumo foi registrado.
 - W9: normalização do evento de erro conferida (workflow, nó, mensagem, id e URL da execução extraídos corretamente).
+- W7 (ramo do Supabase): com 8 páginas de pin data cobrindo as 7 etapas, o nó de código montou o JSON com `ordem` correta e um único `calculado_em`; o SQL do `insert ... select from jsonb_array_elements` foi rodado contra o banco real (incluindo observação da IA com aspas e observação vazia virando `null`) e a leitura que a plataforma faz devolveu as 7 etapas na ordem. As linhas de teste foram removidas.
 
 No banco real (Supabase), com literais no lugar dos parâmetros:
 - W1 *Buscar Candidatos* e *Registrar Lista e Reservas* (lista + 2 reservas criadas e depois removidas).

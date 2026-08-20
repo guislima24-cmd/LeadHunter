@@ -1,7 +1,7 @@
 'use client'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { Logo } from '@/components/Logo'
 import { NAVEGACAO, type ItemNavegacao } from '@/lib/navegacao'
 import { cn } from '@/lib/cn'
@@ -101,9 +101,6 @@ function CartaoMembro({ membro }: { membro: Membro }) {
 export function BarraLateral({ membro }: { membro: Membro }) {
   const caminho = usePathname()
   const [aberta, setAberta] = useState(false)
-
-  // Fecha a gaveta ao trocar de rota no celular.
-  useEffect(() => setAberta(false), [caminho])
 
   const itens = NAVEGACAO.filter(
     (item) => !item.somenteAdmin || membro.papel === 'admin',

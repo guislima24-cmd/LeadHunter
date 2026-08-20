@@ -169,3 +169,172 @@ export async function obterLista(
     })),
   }
 }
+
+export interface EtapaFunil {
+  chave: string
+  rotulo: string
+  descricao: string
+  quantidade: number
+}
+
+export interface MetricaFunilW7 {
+  etapa: string
+  ordem: number
+  quantidadeAtual: number
+  taxaConversao: number | null
+  tempoMedioDias: number | null
+  totalLeads: number
+  observacoesIa: string | null
+}
+
+/** Funil que a própria plataforma movimenta, do lead gerado ao email enviado. */
+export async function obterFunilDoMembro(membro: string | null): Promise<EtapaFunil[]> {
+  if (!membro) return []
+
+  const db = criarClienteAdmin()
+  const { data } = await db.rpc('funil_do_membro', { p_membro: membro })
+  const linha = (Array.isArray(data) ? data[0] : data) as
+    | Record<string, number>
+    | undefined
+
+  return [
+    {
+      chave: 'gerados',
+      rotulo: 'Leads gerados',
+      descricao: 'Entraram em alguma lista sua, já sem duplicados',
+      quantidade: Number(linha?.leads_gerados ?? 0),
+    },
+    {
+      chave: 'reservados',
+      rotulo: 'Reservados agora',
+      descricao: 'Travados no seu nome, dentro da janela de 24 h',
+      quantidade: Number(linha?.reservas_ativas ?? 0),
+    },
+    {
+      chave: 'enriquecidos',
+      rotulo: 'Enriquecidos pela IA',
+      descricao: 'Com decisor, site e contexto da web confirmados',
+      quantidade: Number(linha?.enriquecidos ?? 0),
+    },
+    {
+      chave: 'emails',
+      rotulo: 'Emails enviados',
+      descricao: 'Prospecção disparada pela plataforma',
+      quantidade: Number(linha?.emails_enviados ?? 0),
+    },
+    {
+      chave: 'contatados',
+      rotulo: 'Leads contatados',
+      descricao: 'Marcados como contatados na base',
+      quantidade: Number(linha?.contatados ?? 0),
+    },
+  ]
+}
+
+/** Última fotografia do funil comercial calculada pelo W7. */
+export async function obterMetricasW7(): Promise<{
+  calculadoEm: string | null
+  metricas: MetricaFunilW7[]
+}> {
+  const db = criarClienteAdmin()
+
+  const { data: maisRecente } = await db
+    .from('funil_metricas')
+    .select('calculado_em')
+    .order('calculado_em', { ascending: false })
+    .limit(1)
+    .maybeSingle()
+
+  if (!maisRecente?.calculado_em) return { calculadoEm: null, metricas: [] }
+
+  const { data } = await db
+    .from('funil_metricas')
+    .select('etapa, ordem, quantidade_atual, taxa_conversao, tempo_medio_dias, total_leads, observacoes_ia')
+    .eq('calculado_em', maisRecente.calculado_em)
+    .order('ordem', { ascending: true })
+
+  return {
+    calculadoEm: maisRecente.calculado_em,
+    metricas: (data ?? []).map((m) => ({
+      etapa: String(m.etapa),
+      ordem: Number(m.ordem ?? 0),
+      quantidadeAtual: Number(m.quantidade_atual ?? 0),
+      taxaConversao: m.taxa_conversao == null ? null : Number(m.taxa_conversao),
+      tempoMedioDias:
+        m.tempo_medio_dias == null ? null : Number(m.tempo_medio_dias),
+      totalLeads: Number(m.total_leads ?? 0),
+      observacoesIa: (m.observacoes_ia as string) || null,
+    })),
+  }
+}
+
+export interface FalhaWorkflow {
+  id: string
+  workflowNome: string | null
+  execucaoId: string | null
+  noComErro: string | null
+  mensagem: string | null
+  ocorridoEm: string
+}
+
+export interface PainelMonitoramento {
+  falhas: FalhaWorkflow[]
+  falhasNoMes: number
+  falhasPorWorkflow: Array<{ workflow: string; total: number }>
+  tavilyCreditosMes: number
+  tavilyLeadsMes: number
+}
+
+export async function obterMonitoramento(): Promise<PainelMonitoramento> {
+  const db = criarClienteAdmin()
+  const inicioDoMes = new Date()
+  inicioDoMes.setDate(1)
+  inicioDoMes.setHours(0, 0, 0, 0)
+  const desde = inicioDoMes.toISOString()
+
+  const [falhasRecentes, totalMes, usoTavily] = await Promise.all([
+    db
+      .from('n8n_erros')
+      .select('id, workflow_nome, execucao_id, no_com_erro, mensagem, ocorrido_em')
+      .order('ocorrido_em', { ascending: false })
+      .limit(40),
+    db
+      .from('n8n_erros')
+      .select('*', { count: 'exact', head: true })
+      .gte('ocorrido_em', desde),
+    db
+      .from('tavily_uso')
+      .select('creditos_estimados')
+      .gte('criado_em', desde),
+  ])
+
+  const falhas: FalhaWorkflow[] = (falhasRecentes.data ?? []).map((f) => ({
+    id: String(f.id),
+    workflowNome: (f.workflow_nome as string) || null,
+    execucaoId: (f.execucao_id as string) || null,
+    noComErro: (f.no_com_erro as string) || null,
+    mensagem: (f.mensagem as string) || null,
+    ocorridoEm: String(f.ocorrido_em),
+  }))
+
+  const porWorkflow = new Map<string, number>()
+  for (const falha of falhas) {
+    const nome = falha.workflowNome ?? 'Desconhecido'
+    porWorkflow.set(nome, (porWorkflow.get(nome) ?? 0) + 1)
+  }
+
+  const linhasTavily = usoTavily.data ?? []
+
+  return {
+    falhas,
+    falhasNoMes: totalMes.count ?? 0,
+    falhasPorWorkflow: [...porWorkflow.entries()]
+      .map(([workflow, total]) => ({ workflow, total }))
+      .sort((a, b) => b.total - a.total),
+    tavilyCreditosMes: linhasTavily.reduce(
+      (soma, l) => soma + Number(l.creditos_estimados ?? 0),
+      0,
+    ),
+    tavilyLeadsMes: linhasTavily.length,
+  }
+}
