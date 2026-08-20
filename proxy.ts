@@ -50,6 +50,19 @@ export async function proxy(request: NextRequest) {
   )
 
   if (!user && !ehPublica) {
+    // Chamada de API recebe JSON, não redirecionamento: um 307 para /login
+    // devolveria HTML no meio de um `fetch`, e o `res.json()` da tela
+    // quebraria com erro de parsing em vez de dizer que a sessão expirou.
+    if (caminho.startsWith('/api/')) {
+      return NextResponse.json(
+        {
+          erro: 'sessao_expirada',
+          mensagem: 'Sua sessão expirou. Entre novamente para continuar.',
+        },
+        { status: 401 },
+      )
+    }
+
     const destino = request.nextUrl.clone()
     destino.pathname = '/login'
     destino.search = caminho === '/' ? '' : `?proximo=${encodeURIComponent(caminho)}`
