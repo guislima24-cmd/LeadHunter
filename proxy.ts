@@ -10,7 +10,10 @@ import { NextResponse, type NextRequest } from 'next/server'
  *     autorização de verdade acontece em cada página/rota via `exigirMembro`).
  */
 
-const ROTAS_PUBLICAS = ['/login', '/auth']
+// `/api/saude` fica aberta de propósito: é como se confere, depois de um
+// deploy, que o ambiente subiu configurado — sem precisar de sessão. Ela só
+// devolve booleanos, nunca valor de chave nem dado de negócio.
+const ROTAS_PUBLICAS = ['/login', '/auth', '/api/saude']
 
 export async function proxy(request: NextRequest) {
   let resposta = NextResponse.next({ request })
