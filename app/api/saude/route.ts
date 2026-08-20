@@ -22,26 +22,38 @@ interface Checagem {
  * da `service_role`. As duas parecem iguais a olho nu, e a mensagem de erro
  * do PostgREST não diz qual veio.
  */
-function diagnosticarChave(): { formato: string; papelDeclarado: string | null } {
-  const chave = process.env.SUPABASE_SERVICE_ROLE_KEY
-  if (!chave) return { formato: 'ausente', papelDeclarado: null }
+function diagnosticarChave(): {
+  formato: string
+  papelDeclarado: string | null
+  tinhaEspacos: boolean
+  segmentos: number
+} {
+  const bruta = process.env.SUPABASE_SERVICE_ROLE_KEY
+  const chave = bruta?.trim()
+  const base = {
+    tinhaEspacos: Boolean(bruta && bruta !== chave),
+    segmentos: chave ? chave.split('.').length : 0,
+  }
+  if (!chave) return { formato: 'ausente', papelDeclarado: null, ...base }
 
-  if (chave.startsWith('sb_secret_')) return { formato: 'sb_secret', papelDeclarado: 'service_role' }
-  if (chave.startsWith('sb_publishable_')) return { formato: 'sb_publishable', papelDeclarado: 'anon' }
+  if (chave.startsWith('sb_secret_'))
+    return { formato: 'sb_secret', papelDeclarado: 'service_role', ...base }
+  if (chave.startsWith('sb_publishable_'))
+    return { formato: 'sb_publishable', papelDeclarado: 'anon', ...base }
 
   // Chave legada: é um JWT, e o payload traz o papel em claro.
   const partes = chave.split('.')
   if (partes.length !== 3) {
-    return { formato: 'irreconhecivel', papelDeclarado: null }
+    return { formato: 'irreconhecivel', papelDeclarado: null, ...base }
   }
 
   try {
     const payload = JSON.parse(
       Buffer.from(partes[1], 'base64url').toString('utf8'),
     ) as { role?: string }
-    return { formato: 'jwt', papelDeclarado: payload.role ?? null }
+    return { formato: 'jwt', papelDeclarado: payload.role ?? null, ...base }
   } catch {
-    return { formato: 'jwt_ilegivel', papelDeclarado: null }
+    return { formato: 'jwt_ilegivel', papelDeclarado: null, ...base }
   }
 }
 
