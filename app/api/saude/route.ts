@@ -18,14 +18,15 @@ interface Checagem {
 async function checarBanco(): Promise<Checagem> {
   try {
     const db = criarClienteAdmin()
-    // `head: true` + limite 1: confirma que a chave autentica e que o
-    // PostgREST responde, sem trazer linha nenhuma.
-    const { error } = await db
-      .from('member_profiles')
-      .select('email', { count: 'exact', head: true })
-      .limit(1)
+    // Sem `head: true` de propósito: numa requisição HEAD o corpo vem vazio,
+    // então o motivo da falha (chave inválida, tabela ausente) se perde e o
+    // erro chega com `message` em branco. O dado lido não sai desta função.
+    const { error } = await db.from('member_profiles').select('papel').limit(1)
 
-    if (error) return { ok: false, detalhe: error.message }
+    if (error) {
+      const partes = [error.message, error.hint, error.code].filter(Boolean)
+      return { ok: false, detalhe: partes.join(' · ') || 'erro sem detalhe' }
+    }
     return { ok: true }
   } catch (erro) {
     return {
@@ -73,18 +74,30 @@ export async function GET() {
     checarProvedorGoogle(),
   ])
 
-  const variaveis = {
+  const obrigatorias = {
     NEXT_PUBLIC_SUPABASE_URL: Boolean(process.env.NEXT_PUBLIC_SUPABASE_URL),
     NEXT_PUBLIC_SUPABASE_ANON_KEY: Boolean(process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY),
     SUPABASE_SERVICE_ROLE_KEY: Boolean(process.env.SUPABASE_SERVICE_ROLE_KEY),
+  }
+
+  // `lib/n8n.ts` já cai na instância padrão quando esta não existe, então a
+  // ausência é informação, não falha.
+  const opcionais = {
     N8N_WEBHOOK_BASE: Boolean(process.env.N8N_WEBHOOK_BASE),
   }
 
   const tudoOk =
-    banco.ok && google.ok && Object.values(variaveis).every(Boolean)
+    banco.ok && google.ok && Object.values(obrigatorias).every(Boolean)
 
   return Response.json(
-    { ok: tudoOk, variaveis, banco, google, verificadoEm: new Date().toISOString() },
+    {
+      ok: tudoOk,
+      obrigatorias,
+      opcionais,
+      banco,
+      google,
+      verificadoEm: new Date().toISOString(),
+    },
     { status: tudoOk ? 200 : 503 },
   )
 }
