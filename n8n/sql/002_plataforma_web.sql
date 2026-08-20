@@ -130,7 +130,10 @@ as $$
       where membro = p_membro and expira_em > now()),
     (select count(*) from leads l
       join cnpjs c on c.cnpj = l.cnpj
-      where l.enriquecimento_status = 'concluido'),
+      -- 'ok' é o valor que o W2 grava e o único que a CHECK da tabela aceita
+      -- (junto de 'pendente' e 'erro'). Já foi 'concluido' aqui, e a etapa
+      -- devolvia zero sempre.
+      where l.enriquecimento_status = 'ok'),
     (select count(*) from emails_enviados
       where membro = p_membro and status = 'enviado'),
     (select count(*) from leads where contatado_por = p_membro);

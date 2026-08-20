@@ -19,7 +19,7 @@ import {
 export const metadata = { title: 'Lista' }
 
 const ROTULO_ENRIQUECIMENTO: Record<string, { texto: string; tom: TomBadge }> = {
-  concluido: { texto: 'Enriquecido', tom: 'verde' },
+  ok: { texto: 'Enriquecido', tom: 'verde' },
   pendente: { texto: 'Aguardando cota', tom: 'amarelo' },
   erro: { texto: 'Falhou', tom: 'perigo' },
 }
@@ -50,7 +50,7 @@ export default async function PaginaLista({
   if (!dados) notFound()
 
   const { lista, leads } = dados
-  const enriquecidos = leads.filter((l) => l.enriquecimentoStatus === 'concluido').length
+  const enriquecidos = leads.filter((l) => l.enriquecimentoStatus === 'ok').length
   const contatados = leads.filter((l) => l.contatadoEm).length
   const elegiveis = leads.filter((l) => l.email && !l.contatadoEm).length
 

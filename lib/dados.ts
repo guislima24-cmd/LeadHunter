@@ -81,7 +81,7 @@ export async function obterResumoInicio(membro: string | null): Promise<ResumoIn
       membro
         ? contar('lead_reservas').eq('membro', membro).gt('expira_em', new Date().toISOString())
         : Promise.resolve({ count: 0 }),
-      contar('leads').eq('enriquecimento_status', 'concluido'),
+      contar('leads').eq('enriquecimento_status', 'ok'),
       contar('leads').eq('enriquecimento_status', 'pendente'),
       membro
         ? db
