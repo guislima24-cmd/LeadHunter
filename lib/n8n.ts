@@ -12,6 +12,7 @@ const BASE = process.env.N8N_WEBHOOK_BASE ?? 'https://guizo.app.n8n.cloud/webhoo
 
 export const ROTAS_N8N = {
   gerarLista: '/leadhunter/gerar-lista',
+  enriquecer: '/leadhunter/enriquecer',
   prospectar: '/leadhunter/prospectar',
   linkedin: '/apollo/linkedin-captura',
   maps: '/apollo/maps',

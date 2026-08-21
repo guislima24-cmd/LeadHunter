@@ -153,7 +153,13 @@ Ainda **falta fazer na mão**, uma vez:
 4. **Notion**: criar as databases `Pipeline Comercial` e `Dashboard Funil` com as propriedades da Seção 3 do PRD, compartilhar com a integração e **selecionar as data sources** nos nós de W6 e W7 (a credencial está conectada, mas a database em si precisa ser escolhida). O `Dashboard Funil` ganhou uma propriedade extra `Observações IA` (rich text) para as observações do agente.
 5. **Destinatário do alerta do W9** (campo *To* do nó *Avisar o Responsavel*).
 
-### 4. Front-ends
+### 4. Reenriquecer uma lista
+
+O W2 atende dois gatilhos: a chamada do W1 (`Execute Workflow`, na criação da lista) e o webhook `POST leadhunter/enriquecer` com `{ lista_id }`, que a plataforma usa no botão **Tentar enriquecer de novo**. O webhook responde na hora e o processamento segue em segundo plano.
+
+A consulta pula quem já está `enriquecimento_status = 'ok'`, então reenviar é barato e idempotente: só os leads em erro, pendentes ou nunca processados voltam para a fila.
+
+### 5. Front-ends
 Trocar as chamadas diretas pelos webhooks: `/api/search` → W1, botão "Prospectar via email" → W3, `/api/agent/start-maps` → W5, e a extensão Chrome passa a dar `fetch` no webhook do W4.
 
 ## Decisões de implementação
@@ -161,11 +167,11 @@ Trocar as chamadas diretas pelos webhooks: `/api/search` → W1, botão "Prospec
 - **Postgres em vez do nó Supabase** nos workflows 1–3: o dedupe precisa de `NOT EXISTS`, `unnest`, CTEs e inserts com `RETURNING` em uma única transação — coisas que a API REST do Supabase não expressa bem. Mesmo banco, só outro protocolo.
 - **`filtro_hash`**: `sha1(setor|cidade)` normalizado (minúsculo, sem espaços nas pontas), igual ao `getFilterHash` do Apollo. No W1 é calculado por expressão n8n (`.hash("sha1")`) e no W5 por `crypto.subtle` no Code node — os dois produzem o mesmo hex.
 - **Busca do W1 varre 3× a quantidade pedida** e filtra os bloqueados em memória, para não pagar o `COUNT` que já causava timeout no `/api/search`.
-- **Rate limit do Gemini**: W2 e W3 processam em série com `Wait` de 5 s (≈12 RPM, abaixo dos 15 do free tier); no W5 o agente usa `batching` com 4,5 s entre itens.
+- **Rate limit do Gemini**: W2 processa em série com `Wait` de 15 s entre leads e W3 com 5 s entre envios; no W5 o agente usa `batching` com 4,5 s entre itens. Os 15 s do W2 não são folga: cada rodada do agente dispara várias chamadas ao modelo (prompt + uma por chamada da Tavily), então o RPM real é um múltiplo do número de leads por minuto.
 - **Orçamento do Maps**: o W5 relê `Maps Usage` antes de **cada cidade** e para em US$ 150 (aviso em US$ 100), com a mesma mensagem de hoje. Os custos por chamada (`0.032` text search / `0.017` place details) estão no nó *Montar Linhas de Uso* — ajuste lá se a tabela de preços mudar.
 - **Paginação do Places**: usa a paginação nativa do nó HTTP (até 5 páginas de 20), e o `Último Offset` de `Maps Memory` pula o que já foi coletado, com reset após 60 dias.
 - **Gmail no modo institucional**: uma credencial única para todos. Para o modo individual, duplicar o nó Gmail por membro e colocar um Switch por `membro` antes dele — está anotado no sticky do W3.
-- **Modelo Gemini**: `models/gemini-2.0-flash-lite`, como no PRD. O n8n recomenda modelos mais novos; se a API recusar o 2.0, é trocar no dropdown dos nós de modelo.
+- **Modelo Gemini**: `models/gemini-3.1-flash-lite`, **explícito nos três nós de modelo** (W2, W3, W5). Deixar o campo vazio não é neutro: o nó cai no default dele, hoje `models/gemini-3-flash-preview`, e modelo *preview* tem cota de free tier muito menor que a de um GA. Foi exatamente isso que derrubou 4 de 5 leads de uma lista com `The service is receiving too many requests from you` — o sintoma aparecia como "enriquecimento falhou", sem nenhuma pista do modelo. Se trocar de modelo, troque nos três.
 - **Sync sem cursor**: o W6 compara `etapa_atualizada_em` (planilha) com `Data Última Atualização Etapa` (Notion) e vence o mais recente — não precisa guardar timestamp da última execução.
 
 ## Trava de orçamento da Tavily (W2)

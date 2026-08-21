@@ -8,7 +8,7 @@ import { Tabela, Th, Td, Tr } from '@/components/ui/Tabela'
 import { EstadoVazio } from '@/components/ui/Estado'
 import { BotaoProspectar } from './BotaoProspectar'
 import { PreviaEmail } from './PreviaEmail'
-import { AguardandoEnriquecimento } from './AguardandoEnriquecimento'
+import { PainelEnriquecimento } from './PainelEnriquecimento'
 import { exigirMembro } from '@/lib/sessao'
 import { obterLista, type LeadDaLista } from '@/lib/dados'
 import {
@@ -56,6 +56,10 @@ export default async function PaginaLista({
   const contatados = leads.filter((l) => l.contatadoEm).length
   const elegiveis = leads.filter((l) => l.email && !l.contatadoEm).length
   const naFila = leads.filter((l) => !l.enriquecimentoStatus).length
+  const falhos = leads.filter(
+    (l) =>
+      l.enriquecimentoStatus === 'erro' || l.enriquecimentoStatus === 'pendente',
+  ).length
 
   return (
     <>
@@ -91,7 +95,11 @@ export default async function PaginaLista({
         />
       </section>
 
-      <AguardandoEnriquecimento naFila={naFila} />
+      <PainelEnriquecimento
+        listaId={lista.id}
+        naFila={naFila}
+        falhos={falhos}
+      />
 
       <div className="mt-6">
         <BotaoProspectar
