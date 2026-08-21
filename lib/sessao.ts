@@ -14,6 +14,12 @@ export interface Membro {
   papel: 'membro' | 'admin'
   ativo: boolean
   avatarUrl: string | null
+  /**
+   * Conta que envia a prospecção deste membro. Vazio = conta institucional,
+   * que é como o time opera hoje. Preenchido, a plataforma passa o endereço
+   * adiante para o W3 rotear (ver README, seção de envio individual).
+   */
+  emailRemetente: string | null
 }
 
 /**
@@ -44,7 +50,7 @@ export async function obterMembro(): Promise<Membro | null> {
   const admin = criarClienteAdmin()
   const { data: perfil } = await admin
     .from('member_profiles')
-    .select('email, nome, aba_planilha, papel, ativo')
+    .select('email, nome, aba_planilha, papel, ativo, email_remetente')
     .eq('email', email)
     .maybeSingle()
 
@@ -53,7 +59,7 @@ export async function obterMembro(): Promise<Membro | null> {
     const { data: novo } = await admin
       .from('member_profiles')
       .insert({ email, nome: nomeGoogle })
-      .select('email, nome, aba_planilha, papel, ativo')
+      .select('email, nome, aba_planilha, papel, ativo, email_remetente')
       .single()
 
     if (!novo) return null
@@ -64,6 +70,7 @@ export async function obterMembro(): Promise<Membro | null> {
       papel: novo.papel,
       ativo: novo.ativo,
       avatarUrl,
+      emailRemetente: novo.email_remetente ?? null,
     }
   }
 
@@ -82,6 +89,7 @@ export async function obterMembro(): Promise<Membro | null> {
     papel: perfil.papel,
     ativo: perfil.ativo,
     avatarUrl,
+    emailRemetente: perfil.email_remetente ?? null,
   }
 }
 

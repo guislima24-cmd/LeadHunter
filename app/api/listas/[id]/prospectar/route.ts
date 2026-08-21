@@ -43,7 +43,15 @@ export async function POST(
   const resultado = await chamarN8n<RespostaW3>(ROTAS_N8N.prospectar, {
     lista_id: id,
     membro: aba,
-    ...(corpo.contaGmail ? { conta_gmail: corpo.contaGmail } : {}),
+    // Registra qual conta enviou. Hoje todos saem pela institucional, então
+    // vem do ambiente; quando um membro tiver `email_remetente` preenchido,
+    // passa a ser o dele, e o W3 pode rotear por esse valor.
+    ...(sessao.membro.emailRemetente || process.env.GMAIL_REMETENTE
+      ? {
+          conta_gmail:
+            sessao.membro.emailRemetente ?? process.env.GMAIL_REMETENTE,
+        }
+      : {}),
   })
 
   if (!resultado.ok) {

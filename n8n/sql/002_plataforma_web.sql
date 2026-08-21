@@ -142,6 +142,26 @@ $$;
 revoke execute on function public.funil_do_membro(text) from anon, authenticated;
 
 
+-- -----------------------------------------------------------------------------
+-- 4. `plataforma_email_remetente_por_membro`
+--
+-- Prepara a virada de envio institucional para envio individual.
+--
+--   vazio       -> o email sai pela conta institucional (como hoje)
+--   preenchido  -> a plataforma passa este endereço como remetente pretendido,
+--                  e o W3 pode rotear para a credencial daquele membro
+--
+-- Mora aqui, e não como nó extra no workflow, porque a credencial do Gmail no
+-- n8n é por nó e não aceita expressão: deixar 12 nós vazios esperando
+-- credencial seria estrutura morta. Assim a virada é um UPDATE por membro.
+-- -----------------------------------------------------------------------------
+alter table public.member_profiles
+  add column if not exists email_remetente text;
+
+comment on column public.member_profiles.email_remetente is
+  'Endereço do Gmail que envia a prospecção deste membro. Vazio = conta institucional.';
+
+
 -- =============================================================================
 -- ⚠️ PENDENTE — decisão de segurança que cabe a vocês, não foi aplicada
 --
