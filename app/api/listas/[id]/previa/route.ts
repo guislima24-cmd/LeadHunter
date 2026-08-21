@@ -10,6 +10,9 @@ interface RespostaPreviaW3 {
   empresa?: string
   /** O n8n às vezes devolve o payload do agente aninhado em `output`. */
   output?: { assunto?: string; corpo?: string }
+  /** Preenchido quando o redator falha (cota do modelo, timeout do provedor). */
+  erro?: string
+  mensagem?: string
 }
 
 /**
@@ -72,6 +75,21 @@ export async function POST(
         detalhe: resultado.detalhe,
       },
       { status: resultado.status },
+    )
+  }
+
+  // O W3 responde com `erro` quando o redator nao conseguiu escrever — em geral
+  // cota do Gemini estourada. E uma falha temporaria, e nao um lead invalido:
+  // vale repetir a mensagem do workflow em vez de inventar um diagnostico.
+  if (resultado.dados.erro) {
+    return Response.json(
+      {
+        erro: resultado.dados.erro,
+        mensagem:
+          resultado.dados.mensagem ??
+          'A IA não conseguiu redigir o email agora. Tente de novo em alguns minutos.',
+      },
+      { status: 503 },
     )
   }
 

@@ -52,10 +52,24 @@ export function BotaoProspectar({
   }
 
   if (resultado) {
+    // Zero enviado com erro no meio não é conclusão: é falha. Pintar de verde
+    // era o que fazia a tela dizer "concluída" para uma rodada em que nenhum
+    // email saiu, e o time só descobria depois, na caixa de saída vazia.
+    const deuCerto = resultado.enviados > 0
+    const houveFalha = resultado.erros > 0
+
     return (
-      <div className="surgir rounded-cartao border border-verde-200 bg-verde-50/60 p-4">
+      <div
+        className={`surgir rounded-cartao border p-4 ${
+          deuCerto
+            ? 'border-verde-200 bg-verde-50/60'
+            : 'border-perigo-100 bg-perigo-50/60'
+        }`}
+      >
         <div className="flex flex-wrap items-center gap-2">
-          <Badge tom="verde">Prospecção concluída</Badge>
+          <Badge tom={deuCerto ? 'verde' : 'perigo'}>
+            {deuCerto ? 'Prospecção concluída' : 'Nenhum email enviado'}
+          </Badge>
           <span className="text-sm font-semibold text-tinta-900">
             {formatarNumero(resultado.enviados)} emails enviados
           </span>
@@ -65,6 +79,12 @@ export function BotaoProspectar({
           email) · {formatarNumero(resultado.erros)} com erro · de{' '}
           {formatarNumero(resultado.totalProcessado)} processados.
         </p>
+        {houveFalha && (
+          <p className="mt-1.5 text-xs text-tinta-600">
+            Os leads com erro continuam sem contato e podem ser reenviados: o
+            envio é idempotente, quem já recebeu não recebe de novo.
+          </p>
+        )}
       </div>
     )
   }

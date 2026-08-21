@@ -8,6 +8,7 @@ import { Tabela, Th, Td, Tr } from '@/components/ui/Tabela'
 import { EstadoVazio } from '@/components/ui/Estado'
 import { BotaoProspectar } from './BotaoProspectar'
 import { PreviaEmail } from './PreviaEmail'
+import { AguardandoEnriquecimento } from './AguardandoEnriquecimento'
 import { exigirMembro } from '@/lib/sessao'
 import { obterLista, type LeadDaLista } from '@/lib/dados'
 import {
@@ -54,6 +55,7 @@ export default async function PaginaLista({
   const enriquecidos = leads.filter((l) => l.enriquecimentoStatus === 'ok').length
   const contatados = leads.filter((l) => l.contatadoEm).length
   const elegiveis = leads.filter((l) => l.email && !l.contatadoEm).length
+  const naFila = leads.filter((l) => !l.enriquecimentoStatus).length
 
   return (
     <>
@@ -88,6 +90,8 @@ export default async function PaginaLista({
           apoio="com email e ainda sem contato"
         />
       </section>
+
+      <AguardandoEnriquecimento naFila={naFila} />
 
       <div className="mt-6">
         <BotaoProspectar
