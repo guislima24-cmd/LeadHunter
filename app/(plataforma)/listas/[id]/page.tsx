@@ -7,6 +7,7 @@ import { Badge, type TomBadge } from '@/components/ui/Badge'
 import { Tabela, Th, Td, Tr } from '@/components/ui/Tabela'
 import { EstadoVazio } from '@/components/ui/Estado'
 import { BotaoProspectar } from './BotaoProspectar'
+import { PreviaEmail } from './PreviaEmail'
 import { exigirMembro } from '@/lib/sessao'
 import { obterLista, type LeadDaLista } from '@/lib/dados'
 import {
@@ -115,6 +116,7 @@ export default async function PaginaLista({
                 <Th>Contato</Th>
                 <Th>Enriquecimento</Th>
                 <Th>Prospecção</Th>
+                <Th className="text-right">Email</Th>
               </tr>
             </thead>
             <tbody>
@@ -196,6 +198,14 @@ export default async function PaginaLista({
                     ) : (
                       <span className="text-tinta-400">Sem email</span>
                     )}
+                  </Td>
+                  <Td className="text-right">
+                    <PreviaEmail
+                      listaId={lista.id}
+                      cnpj={lead.cnpj}
+                      empresa={lead.razaoSocial}
+                      temEmail={Boolean(lead.email)}
+                    />
                   </Td>
                 </Tr>
               ))}
