@@ -92,7 +92,10 @@ export function PreviaEmail({
           role="dialog"
           aria-modal="true"
           aria-label={`Prévia do email para ${empresa}`}
-          className="fixed inset-0 z-50 flex items-end justify-center p-0 sm:items-center sm:p-6"
+          // `text-left` explícito: este modal é renderizado dentro de um <td> que
+          // alinha o botão à direita, e `text-align` é herdada — `position:
+          // fixed` tira o elemento do fluxo, mas não da cadeia de herança.
+          className="fixed inset-0 z-50 flex items-end justify-center p-0 text-left sm:items-center sm:p-6"
         >
           <button
             type="button"
@@ -159,7 +162,7 @@ export function PreviaEmail({
                   </dl>
 
                   <div
-                    className="px-5 py-5 text-sm leading-relaxed text-tinta-800 [&_p]:mb-3 [&_strong]:font-semibold [&_strong]:text-tinta-900"
+                    className="px-5 py-5 text-sm leading-relaxed text-tinta-800 [&_p]:mb-3 [&_strong]:font-semibold [&_strong]:text-tinta-900 [&_a]:text-verde-700 [&_a]:underline"
                     dangerouslySetInnerHTML={{ __html: previa.corpo }}
                   />
                 </>
