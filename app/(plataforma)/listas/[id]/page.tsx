@@ -9,8 +9,10 @@ import { EstadoVazio } from '@/components/ui/Estado'
 import { BotaoProspectar } from './BotaoProspectar'
 import { PreviaEmail } from './PreviaEmail'
 import { PainelEnriquecimento } from './PainelEnriquecimento'
+import { PromoverLead } from './PromoverLead'
 import { exigirMembro } from '@/lib/sessao'
 import { obterLista, type LeadDaLista } from '@/lib/dados'
+import { obterNegociosPorCnpj } from '@/lib/crm'
 import {
   formatarCNPJ,
   formatarTelefone,
@@ -52,6 +54,7 @@ export default async function PaginaLista({
   if (!dados) notFound()
 
   const { lista, leads } = dados
+  const negociosPorCnpj = await obterNegociosPorCnpj(leads.map((l) => l.cnpj))
   const enriquecidos = leads.filter((l) => l.enriquecimentoStatus === 'ok').length
   const contatados = leads.filter((l) => l.contatadoEm).length
   const elegiveis = leads.filter((l) => l.email && !l.contatadoEm).length
@@ -128,6 +131,7 @@ export default async function PaginaLista({
                 <Th>Contato</Th>
                 <Th>Enriquecimento</Th>
                 <Th>Prospecção</Th>
+                <Th>Negócio</Th>
                 <Th className="text-right">Email</Th>
               </tr>
             </thead>
@@ -210,6 +214,14 @@ export default async function PaginaLista({
                     ) : (
                       <span className="text-tinta-400">Sem email</span>
                     )}
+                  </Td>
+                  <Td>
+                    <PromoverLead
+                      cnpj={lead.cnpj}
+                      empresa={lead.razaoSocial}
+                      enriquecido={lead.enriquecimentoStatus === 'ok'}
+                      negocioExistente={negociosPorCnpj.get(lead.cnpj) ?? null}
+                    />
                   </Td>
                   <Td className="text-right">
                     <PreviaEmail

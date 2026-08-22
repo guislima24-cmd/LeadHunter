@@ -1,51 +1,109 @@
+import Link from 'next/link'
 import { Cabecalho } from '@/components/layout/Cabecalho'
 import { Card, CardCabecalho } from '@/components/ui/Card'
-import { Barra } from '@/components/ui/Metrica'
+import { Metrica, Barra } from '@/components/ui/Metrica'
 import { Badge } from '@/components/ui/Badge'
-import { Tabela, Th, Td, Tr } from '@/components/ui/Tabela'
 import { EstadoVazio } from '@/components/ui/Estado'
+import { QuadroNegocios } from './QuadroNegocios'
 import { exigirMembro } from '@/lib/sessao'
-import { obterFunilDoMembro, obterMetricasW7 } from '@/lib/dados'
+import { obterFunilDoMembro } from '@/lib/dados'
+import { obterQuadroDeNegocios, listarMotivosPerda } from '@/lib/crm'
 import {
   formatarNumero,
   formatarPercentual,
-  formatarDataHora,
+  formatarReais,
 } from '@/lib/formato'
 
 export const metadata = { title: 'Pipeline' }
 
 export default async function PaginaPipeline() {
   const membro = await exigirMembro()
-  const [funil, w7] = await Promise.all([
+  const [quadro, motivosPerda, funilLeads] = await Promise.all([
+    obterQuadroDeNegocios(),
+    listarMotivosPerda(),
     obterFunilDoMembro(membro.abaPlanilha),
-    obterMetricasW7(),
   ])
 
-  const topo = funil[0]?.quantidade ?? 0
+  const topoLeads = funilLeads[0]?.quantidade ?? 0
 
   return (
     <>
       <Cabecalho
         titulo="Pipeline"
-        descricao="Onde seus leads estão hoje e quanto cada etapa converte."
+        descricao="Os negócios que o time está trabalhando, por etapa do funil."
       />
 
-      <Card>
+      <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <Metrica
+          rotulo="Negócios em aberto"
+          valor={formatarNumero(quadro.totalAbertos)}
+          apoio="somando todas as etapas"
+        />
+        <Metrica
+          rotulo="Valor em aberto"
+          valor={formatarReais(quadro.valorTotalAberto)}
+          apoio="só negócios com valor preenchido"
+          destaque={quadro.valorTotalAberto > 0}
+        />
+        <Metrica
+          rotulo="Ganhos no mês"
+          valor={formatarNumero(quadro.ganhosNoMes)}
+          apoio="fechados desde o dia 1º"
+          destaque={quadro.ganhosNoMes > 0}
+        />
+        <Metrica
+          rotulo="Perdidos no mês"
+          valor={formatarNumero(quadro.perdidosNoMes)}
+          apoio="com motivo registrado"
+        />
+      </section>
+
+      <div className="mt-6">
+        {quadro.totalAbertos === 0 ? (
+          <Card>
+            <CardCabecalho
+              titulo="Funil de negócios"
+              descricao="Cada cartão é uma oportunidade real sendo trabalhada."
+            />
+            <EstadoVazio
+              titulo="Nenhum negócio no funil ainda"
+              descricao="Um negócio nasce quando alguém decide trabalhar um lead de verdade — nenhuma automação cria isso sozinha. Abra uma das suas listas e use “Iniciar negócio” em um lead já enriquecido."
+              acao={
+                <Link
+                  href="/listas"
+                  className="inline-flex h-10 items-center rounded-lg bg-verde-600 px-4 text-sm font-semibold text-white transition-colors hover:bg-verde-700"
+                >
+                  Ir para minhas listas
+                </Link>
+              }
+            />
+          </Card>
+        ) : (
+          <QuadroNegocios
+            colunas={quadro.colunas}
+            motivosPerda={motivosPerda}
+            emailDoMembro={membro.email}
+          />
+        )}
+      </div>
+
+      <Card className="mt-8">
         <CardCabecalho
-          titulo="Seu funil de prospecção"
-          descricao="Calculado ao vivo a partir do que a plataforma movimentou."
+          titulo="Antes do funil: sua prospecção"
+          descricao="Volume bruto que a plataforma movimentou — é daqui que saem os negócios."
         />
 
-        {funil.length === 0 || topo === 0 ? (
+        {funilLeads.length === 0 || topoLeads === 0 ? (
           <EstadoVazio
             titulo="Sem movimento ainda"
-            descricao="Assim que você gerar a primeira lista, o funil começa a se preencher aqui."
+            descricao="Assim que você gerar a primeira lista, esta parte começa a se preencher."
           />
         ) : (
           <div className="divide-y divide-tinta-100">
-            {funil.map((etapa, indice) => {
-              const percentualDoTopo = topo > 0 ? (etapa.quantidade / topo) * 100 : 0
-              const anterior = indice > 0 ? funil[indice - 1] : null
+            {funilLeads.map((etapa, indice) => {
+              const percentualDoTopo =
+                topoLeads > 0 ? (etapa.quantidade / topoLeads) * 100 : 0
+              const anterior = indice > 0 ? funilLeads[indice - 1] : null
               const conversao =
                 anterior && anterior.quantidade > 0
                   ? (etapa.quantidade / anterior.quantidade) * 100
@@ -76,88 +134,19 @@ export default async function PaginaPipeline() {
                   <div className="mt-3">
                     <Barra
                       percentual={percentualDoTopo}
-                      tom={indice === 0 ? 'verde' : percentualDoTopo < 20 ? 'amarelo' : 'verde'}
+                      tom={
+                        indice === 0
+                          ? 'verde'
+                          : percentualDoTopo < 20
+                            ? 'amarelo'
+                            : 'verde'
+                      }
                     />
                   </div>
                 </div>
               )
             })}
           </div>
-        )}
-      </Card>
-
-      <Card className="mt-6">
-        <CardCabecalho
-          titulo="Funil comercial do time"
-          descricao={
-            w7.calculadoEm
-              ? `Calculado pela IA em ${formatarDataHora(w7.calculadoEm)}.`
-              : 'Análise diária a partir do funil de KPI da planilha.'
-          }
-          acao={w7.calculadoEm ? <Badge tom="verde">Atualizado</Badge> : undefined}
-        />
-
-        {w7.metricas.length === 0 ? (
-          <EstadoVazio
-            titulo="Ainda sem dados do time"
-            descricao="Este quadro é preenchido pela análise diária de funil, que roda às 8h e cruza a planilha com o Notion. Ele aparece aqui depois do primeiro ciclo com o Notion conectado."
-          />
-        ) : (
-          <>
-            <Tabela>
-              <thead>
-                <tr>
-                  <Th>Etapa</Th>
-                  <Th className="text-right">Leads na etapa</Th>
-                  <Th className="text-right">Conversão</Th>
-                  <Th className="text-right">Tempo médio</Th>
-                </tr>
-              </thead>
-              <tbody>
-                {w7.metricas.map((m) => (
-                  <Tr key={m.etapa}>
-                    <Td className="font-semibold text-tinta-900">{m.etapa}</Td>
-                    <Td className="numerico text-right">
-                      {formatarNumero(m.quantidadeAtual)}
-                    </Td>
-                    <Td className="numerico text-right text-tinta-600">
-                      {m.taxaConversao == null
-                        ? '—'
-                        : formatarPercentual(m.taxaConversao)}
-                    </Td>
-                    <Td className="numerico text-right text-tinta-600">
-                      {m.tempoMedioDias == null
-                        ? '—'
-                        : `${formatarNumero(Math.round(m.tempoMedioDias))} dias`}
-                    </Td>
-                  </Tr>
-                ))}
-              </tbody>
-            </Tabela>
-
-            {w7.metricas.some((m) => m.observacoesIa) && (
-              <div className="border-t border-tinta-200 px-5 py-4">
-                <p className="mb-2 text-[0.7rem] font-semibold tracking-wide text-tinta-500 uppercase">
-                  Leitura da IA
-                </p>
-                <ul className="space-y-2">
-                  {w7.metricas
-                    .filter((m) => m.observacoesIa)
-                    .map((m) => (
-                      <li key={m.etapa} className="flex gap-2.5 text-sm">
-                        <span className="mt-1.5 size-1.5 shrink-0 rounded-full bg-amarelo-400" />
-                        <span className="leading-relaxed text-tinta-600">
-                          <strong className="font-semibold text-tinta-800">
-                            {m.etapa}:
-                          </strong>{' '}
-                          {m.observacoesIa}
-                        </span>
-                      </li>
-                    ))}
-                </ul>
-              </div>
-            )}
-          </>
         )}
       </Card>
     </>

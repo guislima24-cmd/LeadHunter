@@ -29,6 +29,15 @@ export function formatarDolar(valor: number | null | undefined): string {
   }).format(valor)
 }
 
+export function formatarReais(valor: number | null | undefined): string {
+  if (valor == null || Number.isNaN(valor)) return '—'
+  return new Intl.NumberFormat('pt-BR', {
+    style: 'currency',
+    currency: 'BRL',
+    maximumFractionDigits: 0,
+  }).format(valor)
+}
+
 export function formatarPercentual(valor: number | null | undefined): string {
   if (valor == null || Number.isNaN(valor)) return '—'
   return `${new Intl.NumberFormat('pt-BR', { maximumFractionDigits: 1 }).format(valor)}%`
