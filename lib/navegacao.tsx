@@ -22,7 +22,7 @@ export const NAVEGACAO: ItemNavegacao[] = [
   {
     href: '/',
     rotulo: 'Início',
-    descricao: 'Visão geral da operação',
+    descricao: 'Funil de negócios',
     icone: (
       <svg viewBox="0 0 24 24" {...props}>
         <path d="M3 10.5 12 3l9 7.5" />
@@ -61,16 +61,6 @@ export const NAVEGACAO: ItemNavegacao[] = [
       <svg viewBox="0 0 24 24" {...props}>
         <path d="M12 21s7-5.6 7-11a7 7 0 1 0-14 0c0 5.4 7 11 7 11Z" />
         <circle cx="12" cy="10" r="2.5" />
-      </svg>
-    ),
-  },
-  {
-    href: '/pipeline',
-    rotulo: 'Pipeline',
-    descricao: 'Funil e conversão',
-    icone: (
-      <svg viewBox="0 0 24 24" {...props}>
-        <path d="M3.5 5h17l-6.5 7.5V20l-4-2.5v-5Z" />
       </svg>
     ),
   },

@@ -22,7 +22,7 @@ export function PromoverLead({
   cnpj: string
   empresa: string
   enriquecido: boolean
-  negocioExistente: { etapaNome: string; status: string } | null
+  negocioExistente: { negocioId: string; etapaNome: string; status: string } | null
 }) {
   const router = useRouter()
   const [confirmando, setConfirmando] = useState(false)
@@ -31,7 +31,11 @@ export function PromoverLead({
 
   if (negocioExistente) {
     return (
-      <Link href="/pipeline" className="inline-block" title={`Negócio em ${negocioExistente.etapaNome}`}>
+      <Link
+        href={`/negocios/${negocioExistente.negocioId}`}
+        className="inline-block"
+        title={`Abrir a ficha — negócio em ${negocioExistente.etapaNome}`}
+      >
         <Badge tom={negocioExistente.status === 'aberto' ? 'verde' : 'neutro'}>
           {negocioExistente.status === 'aberto'
             ? negocioExistente.etapaNome

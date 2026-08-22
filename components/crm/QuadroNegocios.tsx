@@ -1,15 +1,20 @@
 'use client'
 import { useEffect, useMemo, useState } from 'react'
+import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
 import { Spinner } from '@/components/ui/Spinner'
+import { NovoNegocio } from '@/components/crm/NovoNegocio'
+import { DialogoFecharNegocio } from '@/components/crm/DialogoFecharNegocio'
 import { cn } from '@/lib/cn'
 import { formatarReais, formatarData, formatarNumero } from '@/lib/formato'
 import type {
   ColunaDoQuadro,
   NegocioNoQuadro,
   MotivoPerda,
+  OrganizacaoConhecida,
+  ProdutoServico,
 } from '@/lib/crm'
 
 /** Cor da faixa no topo da coluna — o campo `cor` da etapa é um token, não um hex. */
@@ -32,10 +37,14 @@ export function QuadroNegocios({
   colunas,
   motivosPerda,
   emailDoMembro,
+  organizacoes,
+  produtos,
 }: {
   colunas: ColunaDoQuadro[]
   motivosPerda: MotivoPerda[]
   emailDoMembro: string
+  organizacoes: OrganizacaoConhecida[]
+  produtos: ProdutoServico[]
 }) {
   const router = useRouter()
 
@@ -135,7 +144,8 @@ export function QuadroNegocios({
   return (
     <>
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          <NovoNegocio organizacoes={organizacoes} produtos={produtos} />
           <Button
             tamanho="sm"
             variante={soMeus ? 'primario' : 'secundario'}
@@ -146,7 +156,7 @@ export function QuadroNegocios({
           </Button>
           <span className="text-xs text-tinta-500">
             {formatarNumero(visiveis.reduce((s, c) => s + c.negocios.length, 0))}{' '}
-            negócios em aberto
+            em aberto
           </span>
         </div>
         <p className="text-xs text-tinta-400">
@@ -256,8 +266,10 @@ export function QuadroNegocios({
       </div>
 
       {fechando && (
-        <DialogoFechar
-          negocio={fechando}
+        <DialogoFecharNegocio
+          negocioId={fechando.id}
+          titulo={fechando.titulo}
+          organizacaoNome={fechando.organizacaoNome}
           motivosPerda={motivosPerda}
           aoCancelar={() => setFechando(null)}
           aoConcluir={() => {
@@ -304,9 +316,15 @@ function Cartao({
       )}
     >
       <div className="flex items-start justify-between gap-1.5">
-        <p className="min-w-0 flex-1 text-sm leading-snug font-semibold text-tinta-900">
+        <Link
+          href={`/negocios/${negocio.id}`}
+          // O link cobre o cartão inteiro para o clique valer em qualquer
+          // ponto; o menu e o próprio arraste ficam por cima (z-10 / relative).
+          className="min-w-0 flex-1 text-sm leading-snug font-semibold text-tinta-900 hover:text-verde-700 hover:underline before:absolute before:inset-0 before:content-['']"
+          draggable={false}
+        >
           {negocio.titulo}
-        </p>
+        </Link>
         {salvando ? (
           <Spinner className="mt-0.5 size-3.5 shrink-0 text-verde-600" />
         ) : (
@@ -338,6 +356,14 @@ function Cartao({
                   role="menu"
                   className="surgir absolute right-0 z-20 mt-1 w-52 rounded-lg border border-tinta-200 bg-white py-1 text-left shadow-lg"
                 >
+                  <Link
+                    role="menuitem"
+                    href={`/negocios/${negocio.id}`}
+                    className="block px-3 py-1.5 text-xs font-semibold text-tinta-700 transition-colors hover:bg-tinta-50"
+                  >
+                    Abrir ficha
+                  </Link>
+                  <div className="my-1 border-t border-tinta-100" />
                   <p className="px-3 py-1.5 text-[0.65rem] font-semibold tracking-wide text-tinta-400 uppercase">
                     Mover para
                   </p>
@@ -418,137 +444,5 @@ function Cartao({
         )}
       </div>
     </article>
-  )
-}
-
-function DialogoFechar({
-  negocio,
-  motivosPerda,
-  aoCancelar,
-  aoConcluir,
-}: {
-  negocio: NegocioNoQuadro
-  motivosPerda: MotivoPerda[]
-  aoCancelar: () => void
-  aoConcluir: () => void
-}) {
-  const [status, setStatus] = useState<'ganho' | 'perdido'>('ganho')
-  const [motivo, setMotivo] = useState('')
-  const [salvando, setSalvando] = useState(false)
-  const [erro, setErro] = useState<string | null>(null)
-
-  async function confirmar() {
-    if (status === 'perdido' && !motivo) {
-      setErro('Escolha o motivo da perda.')
-      return
-    }
-    setSalvando(true)
-    setErro(null)
-    try {
-      const res = await fetch(`/api/crm/negocios/${negocio.id}/fechar`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          status,
-          motivoPerdaId: status === 'perdido' ? motivo : null,
-        }),
-      })
-      if (!res.ok) {
-        const dados = await res.json().catch(() => ({}))
-        setErro(dados.mensagem ?? 'Não foi possível fechar o negócio.')
-        return
-      }
-      aoConcluir()
-    } catch {
-      setErro('Falha de conexão ao fechar o negócio.')
-    } finally {
-      setSalvando(false)
-    }
-  }
-
-  return (
-    <div
-      role="dialog"
-      aria-modal="true"
-      aria-label={`Fechar negócio ${negocio.titulo}`}
-      className="fixed inset-0 z-50 flex items-end justify-center bg-tinta-900/40 p-0 text-left sm:items-center sm:p-6"
-      onClick={(e) => {
-        if (e.target === e.currentTarget) aoCancelar()
-      }}
-    >
-      <div className="surgir w-full max-w-md rounded-t-cartao bg-white p-5 shadow-lg sm:rounded-cartao">
-        <h2 className="font-titulo text-base font-bold text-tinta-900">
-          Fechar negócio
-        </h2>
-        <p className="mt-0.5 truncate text-sm text-tinta-500">
-          {negocio.titulo} · {negocio.organizacaoNome}
-        </p>
-
-        <div className="mt-4 grid grid-cols-2 gap-2">
-          {(['ganho', 'perdido'] as const).map((opcao) => (
-            <button
-              key={opcao}
-              onClick={() => setStatus(opcao)}
-              aria-pressed={status === opcao}
-              className={cn(
-                'rounded-lg border px-3 py-2.5 text-sm font-semibold capitalize transition-colors',
-                status === opcao
-                  ? opcao === 'ganho'
-                    ? 'border-verde-500 bg-verde-50 text-verde-700'
-                    : 'border-perigo-500 bg-perigo-50 text-perigo-700'
-                  : 'border-tinta-200 bg-white text-tinta-600 hover:bg-tinta-50',
-              )}
-            >
-              {opcao}
-            </button>
-          ))}
-        </div>
-
-        {status === 'perdido' && (
-          <label className="mt-4 block">
-            <span className="text-xs font-semibold text-tinta-700">
-              Motivo da perda
-            </span>
-            <select
-              value={motivo}
-              onChange={(e) => setMotivo(e.target.value)}
-              className="mt-1 h-10 w-full rounded-lg border border-tinta-200 bg-white px-3 text-sm text-tinta-900 focus:border-verde-500 focus:outline-none"
-            >
-              <option value="">Escolha…</option>
-              {motivosPerda.map((m) => (
-                <option key={m.id} value={m.id}>
-                  {m.nome}
-                </option>
-              ))}
-            </select>
-          </label>
-        )}
-
-        <p className="mt-3 text-xs leading-relaxed text-tinta-500">
-          O negócio sai do quadro e passa a contar nos fechados do mês. O
-          histórico de etapas é preservado para o cálculo de conversão.
-        </p>
-
-        {erro && (
-          <p className="mt-3 rounded-lg bg-perigo-50 px-3 py-2 text-xs text-perigo-700">
-            {erro}
-          </p>
-        )}
-
-        <div className="mt-4 flex justify-end gap-2">
-          <Button variante="secundario" tamanho="sm" onClick={aoCancelar} disabled={salvando}>
-            Cancelar
-          </Button>
-          <Button
-            tamanho="sm"
-            variante={status === 'ganho' ? 'primario' : 'perigo'}
-            onClick={confirmar}
-            carregando={salvando}
-          >
-            Marcar como {status}
-          </Button>
-        </div>
-      </div>
-    </div>
   )
 }

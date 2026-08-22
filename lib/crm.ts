@@ -1,4 +1,5 @@
 import 'server-only'
+import { cache } from 'react'
 import { criarClienteAdmin } from '@/lib/supabase/admin'
 
 /**
@@ -34,6 +35,12 @@ const MENSAGENS_ERRO_RPC: Record<string, { mensagem: string; status: number }> =
     mensagem: 'Negócio não encontrado ou já está fechado.',
     status: 409,
   },
+  organizacao_nome_obrigatorio: {
+    mensagem: 'Informe o nome da empresa.',
+    status: 400,
+  },
+  titulo_obrigatorio: { mensagem: 'Informe o título do negócio.', status: 400 },
+  cnpj_invalido: { mensagem: 'CNPJ precisa ter 14 dígitos.', status: 400 },
 }
 
 export interface RespostaRpc<T> {
@@ -253,4 +260,283 @@ export async function listarMotivosPerda(): Promise<MotivoPerda[]> {
     .eq('ativo', true)
     .order('ordem', { ascending: true })
   return data ?? []
+}
+
+export interface ProdutoServico {
+  id: string
+  nome: string
+}
+
+export async function listarProdutosServicos(): Promise<ProdutoServico[]> {
+  const admin = criarClienteAdmin()
+  const { data } = await admin
+    .from('produtos_servicos')
+    .select('id, nome')
+    .eq('ativo', true)
+    .order('ordem', { ascending: true })
+  return data ?? []
+}
+
+export interface OrganizacaoConhecida {
+  id: string
+  nome: string
+  cnpj: string | null
+}
+
+/**
+ * Empresas que já estão no CRM, para o formulário de negócio manual oferecer
+ * como sugestão em vez de deixar o membro recriar uma que já existe.
+ *
+ * Não pagina: `organizacoes` só cresce quando alguém decide trabalhar uma
+ * empresa de verdade, então são dezenas ou centenas — não os 1,6 milhão de
+ * `leads`. Se um dia passar disso, isto vira busca no servidor.
+ */
+export async function listarOrganizacoes(): Promise<OrganizacaoConhecida[]> {
+  const admin = criarClienteAdmin()
+  const { data } = await admin
+    .from('organizacoes')
+    .select('id, razao_social, cnpj')
+    .order('razao_social', { ascending: true })
+    .limit(500)
+  return (data ?? []).map((o) => ({
+    id: o.id as string,
+    nome: o.razao_social as string,
+    cnpj: (o.cnpj as string | null) ?? null,
+  }))
+}
+
+export interface Contato {
+  id: string
+  nome: string
+  cargo: string | null
+  email: string | null
+  telefone: string | null
+  linkedinUrl: string | null
+  principal: boolean
+}
+
+export async function listarContatosDaOrganizacao(
+  organizacaoId: string,
+): Promise<Contato[]> {
+  const admin = criarClienteAdmin()
+  const { data } = await admin
+    .from('contatos')
+    .select('id, nome, cargo, email, telefone, linkedin_url, principal')
+    .eq('organizacao_id', organizacaoId)
+    .order('principal', { ascending: false })
+    .order('criado_em', { ascending: true })
+  return (data ?? []).map((c) => ({
+    id: c.id as string,
+    nome: c.nome as string,
+    cargo: (c.cargo as string | null) ?? null,
+    email: (c.email as string | null) ?? null,
+    telefone: (c.telefone as string | null) ?? null,
+    linkedinUrl: (c.linkedin_url as string | null) ?? null,
+    principal: Boolean(c.principal),
+  }))
+}
+
+export interface TipoAtividade {
+  id: string
+  nome: string
+  icone: string | null
+}
+
+export async function listarTiposAtividade(): Promise<TipoAtividade[]> {
+  const admin = criarClienteAdmin()
+  const { data } = await admin
+    .from('tipos_atividade')
+    .select('id, nome, icone')
+    .eq('ativo', true)
+    .order('nome', { ascending: true })
+  return (data ?? []).map((t) => ({
+    id: t.id as string,
+    nome: t.nome as string,
+    icone: (t.icone as string | null) ?? null,
+  }))
+}
+
+export interface MembroResumido {
+  email: string
+  nome: string
+}
+
+/** Para o seletor de dono do negócio (troca restrita a admin). */
+export async function listarMembrosAtivos(): Promise<MembroResumido[]> {
+  const admin = criarClienteAdmin()
+  const { data } = await admin
+    .from('member_profiles')
+    .select('email, nome')
+    .eq('ativo', true)
+    .order('email', { ascending: true })
+  return (data ?? []).map((m) => ({
+    email: m.email as string,
+    nome: (m.nome as string) || (m.email as string),
+  }))
+}
+
+export interface NegocioDetalhado extends NegocioNoQuadro {
+  etapaNome: string
+  status: 'aberto' | 'ganho' | 'perdido'
+  fechadoEm: string | null
+  motivoPerda: string | null
+  produtoServicoId: string | null
+  organizacaoCnpj: string | null
+  organizacaoSetor: string | null
+  organizacaoCidade: string | null
+  organizacaoEstado: string | null
+  organizacaoSite: string | null
+  organizacaoTelefone: string | null
+  contatoId: string | null
+  contatoCargo: string | null
+  contatoEmail: string | null
+  contatoTelefone: string | null
+  leadOrigemCnpj: string | null
+  origem: string
+  criadoPorEmail: string
+  atualizadoEm: string
+}
+
+/**
+ * Ficha completa de um negócio. `null` quando o id não existe.
+ *
+ * Em `cache` porque a página e o `generateMetadata` dela pedem o mesmo
+ * negócio na mesma requisição — sem isso são duas idas ao banco para montar
+ * uma tela só.
+ */
+export const obterNegocio = cache(async function obterNegocio(
+  id: string,
+): Promise<NegocioDetalhado | null> {
+  const admin = criarClienteAdmin()
+  const { data: n } = await admin
+    .from('vw_quadro_negocios')
+    .select('*')
+    .eq('id', id)
+    .maybeSingle()
+
+  if (!n) return null
+
+  return {
+    id: n.id as string,
+    titulo: n.titulo as string,
+    etapaId: n.etapa_id as string,
+    etapaNome: n.etapa_nome as string,
+    status: n.status as 'aberto' | 'ganho' | 'perdido',
+    valor: n.valor == null ? null : Number(n.valor),
+    previsaoFechamento: (n.previsao_fechamento as string | null) ?? null,
+    fechadoEm: (n.fechado_em as string | null) ?? null,
+    motivoPerda: (n.motivo_perda as string | null) ?? null,
+    donoEmail: n.dono_email as string,
+    donoNome: n.dono_nome as string,
+    organizacaoId: n.organizacao_id as string,
+    organizacaoNome: n.organizacao_nome as string,
+    organizacaoCnpj: (n.organizacao_cnpj as string | null) ?? null,
+    organizacaoSetor: (n.organizacao_setor as string | null) ?? null,
+    organizacaoCidade: (n.organizacao_cidade as string | null) ?? null,
+    organizacaoEstado: (n.organizacao_estado as string | null) ?? null,
+    organizacaoSite: (n.organizacao_site as string | null) ?? null,
+    organizacaoTelefone: (n.organizacao_telefone as string | null) ?? null,
+    contatoId: (n.contato_id as string | null) ?? null,
+    contatoNome: (n.contato_nome as string | null) ?? null,
+    contatoCargo: (n.contato_cargo as string | null) ?? null,
+    contatoEmail: (n.contato_email as string | null) ?? null,
+    contatoTelefone: (n.contato_telefone as string | null) ?? null,
+    produtoServico: (n.produto_servico as string | null) ?? null,
+    produtoServicoId: (n.produto_servico_id as string | null) ?? null,
+    leadOrigemCnpj: (n.lead_origem_cnpj as string | null) ?? null,
+    origem: n.origem as string,
+    criadoPorEmail: n.criado_por_email as string,
+    criadoEm: n.criado_em as string,
+    atualizadoEm: n.atualizado_em as string,
+    atrasado: Boolean(n.atrasado),
+  }
+})
+
+export interface Atividade {
+  id: string
+  tipoId: string
+  tipoNome: string
+  titulo: string
+  descricao: string | null
+  dataPrazo: string | null
+  concluida: boolean
+  concluidaEm: string | null
+  responsavelEmail: string
+  criadoEm: string
+  /** Prazo já passou e a atividade segue aberta. Decidido aqui, não na tela:
+   *  comparar com o relógio durante o render deixaria o componente impuro. */
+  vencida: boolean
+}
+
+export async function listarAtividadesDoNegocio(
+  negocioId: string,
+): Promise<Atividade[]> {
+  const admin = criarClienteAdmin()
+  const [{ data: linhas }, tipos] = await Promise.all([
+    admin
+      .from('atividades')
+      .select(
+        'id, tipo_id, titulo, descricao, data_prazo, concluida, concluida_em, responsavel_email, criado_em',
+      )
+      .eq('negocio_id', negocioId)
+      .order('criado_em', { ascending: false }),
+    listarTiposAtividade(),
+  ])
+
+  // Resolve o nome do tipo aqui em vez de embed do PostgREST, pela mesma razão
+  // de `vw_quadro_negocios`: a forma do embed depende da cardinalidade inferida.
+  const nomePorTipo = new Map(tipos.map((t) => [t.id, t.nome]))
+  const agora = Date.now()
+
+  return (linhas ?? []).map((a) => {
+    const dataPrazo = (a.data_prazo as string | null) ?? null
+    const concluida = Boolean(a.concluida)
+    return {
+      id: a.id as string,
+      tipoId: a.tipo_id as string,
+      tipoNome: nomePorTipo.get(a.tipo_id as string) ?? 'Atividade',
+      titulo: a.titulo as string,
+      descricao: (a.descricao as string | null) ?? null,
+      dataPrazo,
+      concluida,
+      concluidaEm: (a.concluida_em as string | null) ?? null,
+      responsavelEmail: a.responsavel_email as string,
+      criadoEm: a.criado_em as string,
+      vencida:
+        !concluida && dataPrazo != null && new Date(dataPrazo).getTime() < agora,
+    }
+  })
+}
+
+export interface PassagemDeEtapa {
+  etapaNome: string
+  entrouEm: string
+  saiuEm: string | null
+  alteradoPorEmail: string
+}
+
+/** Histórico de etapas do negócio, do mais antigo para o mais recente. */
+export async function obterHistoricoDeEtapas(
+  negocioId: string,
+): Promise<PassagemDeEtapa[]> {
+  const admin = criarClienteAdmin()
+  const [{ data: linhas }, { data: etapas }] = await Promise.all([
+    admin
+      .from('negocio_etapa_historico')
+      .select('etapa_id, entrou_em, saiu_em, alterado_por_email')
+      .eq('negocio_id', negocioId)
+      .order('entrou_em', { ascending: true }),
+    admin.from('etapas_funil').select('id, nome'),
+  ])
+
+  const nomePorEtapa = new Map(
+    (etapas ?? []).map((e) => [e.id as string, e.nome as string]),
+  )
+
+  return (linhas ?? []).map((h) => ({
+    etapaNome: nomePorEtapa.get(h.etapa_id as string) ?? 'Etapa removida',
+    entrouEm: h.entrou_em as string,
+    saiuEm: (h.saiu_em as string | null) ?? null,
+    alteradoPorEmail: h.alterado_por_email as string,
+  }))
 }

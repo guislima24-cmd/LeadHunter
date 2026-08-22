@@ -207,8 +207,9 @@ Desde 20/08/2026 os workflows são disparados pela plataforma (`/buscar`,
 - **O W7 ganhou um ramo novo** (`Montar Metricas para o Supabase` →
   `Gravar Metricas no Supabase`), paralelo à gravação no Notion/planilha. Ele
   grava uma fotografia das métricas na tabela `funil_metricas` do Supabase, que
-  é o que a tela `/pipeline` lê. Fica em paralelo de propósito: a gravação
-  acontece mesmo se o Notion falhar.
+  é o que a página inicial lê (o quadro de negócios era `/pipeline` e passou a
+  ser `/`). Fica em paralelo de propósito: a gravação acontece mesmo se o
+  Notion falhar.
 
 Os webhooks continuam funcionando sozinhos — nada impede chamá-los direto.
 
@@ -238,7 +239,21 @@ Os nós Postgres que fecham os loops do W2 e do W3 (`Gravar Enriquecimento`, `Ma
 
 ## CRM sobre a Lead Hunter
 
-Implementação de `leadhunter-crm-especificacao-tecnica.md`. Schema e RPCs em `sql/003_crm.sql` a `006_crm_organizacoes_cnpj_opcional.sql`; a lógica de negócio (promover lead, mover etapa, fechar negócio) vive em funções Postgres chamadas via `.rpc()` pelas rotas `app/api/crm/*` da plataforma — não em novos webhooks n8n, exceto o ajuste do W4 abaixo.
+Implementação de `leadhunter-crm-especificacao-tecnica.md`. Schema e RPCs em `sql/003_crm.sql` a `008_crm_negocio_manual.sql`; a lógica de negócio (promover lead, criar negócio, mover etapa, fechar negócio) vive em funções Postgres chamadas via `.rpc()` pelas rotas `app/api/crm/*` da plataforma — não em novos webhooks n8n, exceto o ajuste do W4 abaixo.
+
+Cinco funções transacionais, uma por fluxo que grava em mais de uma tabela:
+
+| Função | Migração | Quando |
+|---|---|---|
+| `crm_promover_lead` | 004 | "Iniciar negócio" num lead da lista |
+| `crm_criar_negocio_avulso` | 004 | Negócio novo para organização que já está no CRM |
+| `crm_criar_negocio_manual` | 008 | Botão "Novo negócio" do quadro — cria organização e contato junto, se preciso |
+| `crm_mover_etapa` | 004 | Arraste no quadro, ou a esteira da ficha |
+| `crm_fechar_negocio` | 004 | Marcar como ganho/perdido |
+
+`crm_criar_negocio_manual` reaproveita a organização pelo CNPJ quando há um e, quando não há, pelo nome (comparação sem caixa nem espaços nas pontas) — inclusive contra organizações que têm CNPJ, para que escolher uma empresa existente na sugestão do formulário não crie uma segunda linha para o mesmo cliente. Homônimas de verdade se separam informando o CNPJ.
+
+`008` também acrescenta colunas a `vw_quadro_negocios` (ids de produto/serviço e motivo de perda, origem, dados de contato e da empresa) — a ficha do negócio precisa delas para preencher os campos de edição.
 
 ### Ajustes exigidos pelo schema real (a especificação assumia diferente)
 

@@ -22,11 +22,12 @@ workflows com a identidade certa e mostra o resultado.
 
 | Rota | O que faz | Workflow |
 |---|---|---|
-| `/` | Panorama: leads na base, listas, emails, reservas, status do enriquecimento | — |
+| `/` | Quadro de negócios (kanban) do time e, abaixo, o panorama da operação: leads na base, listas, emails, reservas, enriquecimento e funil de prospecção | — |
+| `/negocios/[id]` | Ficha do negócio: etapa, campos editáveis, empresa, contatos e linha do tempo (atividades + passagens de etapa) | — |
 | `/buscar` | Filtra a base da Receita Federal, pré-visualiza e gera lista com dedupe + reserva de 24 h | W1 → W2 |
 | `/listas` · `/listas/[id]` | Listas geradas, enriquecimento por lead e disparo da prospecção por email | W2, W3 |
 | `/maps` | Prospecção de negócios locais por setor e cidade, com análise da IA | W5 |
-| `/pipeline` | Funil de prospecção (ao vivo) + funil comercial do time (análise diária) | W7 |
+| `/pipeline` | Redireciona para `/` — o quadro deixou de ter aba própria | — |
 | `/monitoramento` | Falhas das automações e consumo de Tavily/Maps — **só administradores** | W9 |
 
 ## Como rodar
