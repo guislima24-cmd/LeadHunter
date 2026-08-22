@@ -1,0 +1,8 @@
+{
+  "crons": [
+    {
+      "path": "/api/cron/atividades-vencendo",
+      "schedule": "0 * * * *"
+    }
+  ]
+}

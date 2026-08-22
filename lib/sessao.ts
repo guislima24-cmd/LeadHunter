@@ -129,6 +129,27 @@ export async function exigirMembroNaApi(): Promise<
 }
 
 /**
+ * Para rotas do CRM restritas a admin (reatribuir dono, configurar etapas,
+ * produtos, motivos de perda, tipos de atividade, campos dinâmicos).
+ *
+ * A checagem real de autorização é aqui — a RLS do banco é defesa em
+ * profundidade, não o mecanismo principal (a aplicação sempre fala com o
+ * Postgres pela chave de service role, ver n8n/sql/003_crm.sql).
+ */
+export function exigirAdmin(membro: Membro): Response | null {
+  if (membro.papel !== 'admin') {
+    return Response.json(
+      {
+        erro: 'acao_restrita_a_admin',
+        mensagem: 'Só um administrador pode fazer isso.',
+      },
+      { status: 403 },
+    )
+  }
+  return null
+}
+
+/**
  * Como todo workflow grava na aba do membro, quem não tem vínculo não pode
  * dispará-los — mas continua enxergando as telas de leitura.
  */

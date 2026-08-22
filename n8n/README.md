@@ -235,3 +235,43 @@ Falta a execução real ponta a ponta pelo n8n, que depende dos pré-requisitos 
 ## Ajuste pós-teste
 
 Os nós Postgres que fecham os loops do W2 e do W3 (`Gravar Enriquecimento`, `Marcar Enriquecimento com Erro`, `Registrar Envio`, `Registrar Falha de Envio`) ficaram com `alwaysOutputData` ligado: se um `UPDATE ... RETURNING` não casar nenhuma linha, o nó ainda emite um item e o `nextBatch` continua o loop, em vez de a execução parar no meio e o webhook ficar sem resposta.
+
+## CRM sobre a Lead Hunter
+
+Implementação de `leadhunter-crm-especificacao-tecnica.md`. Schema e RPCs em `sql/003_crm.sql` a `006_crm_organizacoes_cnpj_opcional.sql`; a lógica de negócio (promover lead, mover etapa, fechar negócio) vive em funções Postgres chamadas via `.rpc()` pelas rotas `app/api/crm/*` da plataforma — não em novos webhooks n8n, exceto o ajuste do W4 abaixo.
+
+### Ajustes exigidos pelo schema real (a especificação assumia diferente)
+
+- `member_profiles` é chaveado por **`email`** (texto), não tem coluna `id`/uuid. Toda FK que a especificação desenhava para `member_profiles(id)` virou `*_email text references member_profiles(email)`.
+- `member_profiles.papel` já existia com o check `'membro'/'admin'` — a migração 4.1 da especificação (criar `role`) foi descartada.
+- A tabela de reserva de 24h do W1 é `lead_reservas` (confirmado por inspeção direta do schema).
+- `organizacoes.cnpj` **não é obrigatório**: a especificação previa `not null unique`, mas uma organização capturada via LinkedIn (W4) não tem CNPJ, só nome. Ver `006_crm_organizacoes_cnpj_opcional.sql`.
+- `organizacoes.lead_origem_cnpj` e `negocios.lead_origem_cnpj` **não são foreign key** para `leads.cnpj`: essa coluna não tem constraint de unicidade em produção (está de fato única — 1.674.987 linhas, 0 duplicatas, auditado antes de decidir — mas criar um índice único nela é lock desnecessário numa tabela de 1,6M linhas que W1/W2/W3 escrevem o tempo todo). Ficam como referência indexada, não uma FK estrita.
+
+### RLS
+
+As 4 tabelas legadas que estavam sem RLS (`leads`, `activity_log`, `member_profiles`, `configuracoes`) foram habilitadas nesta rodada, junto com todas as tabelas novas do CRM — decisão que estava pendente desde a plataforma web (documento de referência, Seção 5/6) e que a especificação do CRM pedia para resolver junto.
+
+Antes de habilitar, foi auditado que **nenhum código da aplicação lê essas tabelas com a chave anon**: o cliente ligado à sessão do navegador (`lib/supabase/servidor.ts`) só é usado para `auth.getUser()`/`signOut()`, nunca para consulta de dado — toda leitura/escrita real passa pela chave de service role (`lib/supabase/admin.ts`), que ignora RLS. Por isso habilitar RLS não quebra nada em produção; é defesa em profundidade contra a chave anon (pública, repositório público) sendo usada fora da aplicação.
+
+A policy de leitura checa o domínio institucional direto do JWT (`auth.jwt()->>'email' ilike '%@ufabcjr.com.br'`), não só "está autenticado" — o provedor Google do Supabase Auth aceita qualquer conta Google, então sem esse filtro uma conta fora do domínio com a chave anon leria tudo.
+
+Rodado `get_advisors` (security) depois da migração: 4 ERROR (views de funil rodando como `SECURITY DEFINER` do dono, ignorando a RLS de baixo) e 6 WARN (search_path mutável nas funções, `is_membro_ufabcjr`/`is_admin_ufabcjr` executáveis por anon como definer) — todos corrigidos em `005_crm_correcoes_advisor.sql`. Os 57 WARN restantes ("tabela visível no schema GraphQL para anon/authenticated") são o mesmo padrão de grant default que já existe em toda tabela do projeto, não algo introduzido aqui.
+
+### W4 passa a gravar também no Postgres central
+
+Além da aba do membro na planilha (como sempre fez), o nó novo **Gravar Organizacao e Contato no CRM** faz upsert em `organizacoes`/`contatos` com dedupe por `linkedin_url` — mesma lógica que o nó `Resolver ID Sync` já usa para a planilha. Roda em paralelo, com `onError: continueRegularOutput`: se o Postgres falhar, a gravação na planilha (o caminho que já funciona em produção) segue intacta e a resposta ao webhook não muda.
+
+Resolve `criado_por_email` fazendo `member_profiles.aba_planilha = membro` (o payload da extensão manda o nome da aba, não o email) — se a aba não corresponder a nenhum membro cadastrado, a gravação no CRM é pulada silenciosamente (nada quebra, só não gera organização/contato).
+
+**Bug de produção encontrado durante o teste, não relacionado a esta mudança:** a credencial `Google Sheets account` (`y7Qjl9cVell53bFu`), usada pelo nó `Gravar na Aba do Membro`, está com o token OAuth inválido (`Unable to sign without access token`) — toda captura de LinkedIn está caindo no branch de erro (`Responder Erro de Planilha`, HTTP 422) para quem usa essa credencial. Precisa reconectar a conta na UI do n8n (Credentials → Google Sheets account → Reconectar), mesma correção já feita antes para o Gmail.
+
+### Notificação de atividade com prazo vencendo
+
+`GET /api/cron/atividades-vencendo` (agendado em `vercel.json`, a cada hora) cria uma linha em `notificacoes` para toda atividade não concluída com prazo nas próximas 24h ou já vencido, sem duplicar enquanto a notificação anterior seguir não lida. **Só cria a notificação in-app** — não envia email. A especificação pede o mesmo padrão de alerta do W9 (email com link direto), mas isso é um novo fluxo de envio dentro do n8n, fora do que uma rota Next.js sozinha resolve; fica registrado como próximo passo.
+
+### O que ficou de fora desta rodada
+
+- **UI/telas** — fora de escopo por decisão explícita da especificação (Seção 7 dela: "Telas, layout e componentes de UI ficam para uma etapa posterior").
+- **Envio de WhatsApp** — schema pronto (`canais_membro`, `whatsapp_enviados`), envio bloqueado até decisão de provedor (Meta Cloud API vs. Twilio/Z-API etc.). `POST /api/crm/canais/whatsapp/conectar` responde 501 explicando o bloqueio.
+- **Migração do módulo Maps para Postgres** — continua em Google Sheets, registrado como backlog explícito na própria especificação.
