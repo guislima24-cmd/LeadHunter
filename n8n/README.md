@@ -272,7 +272,7 @@ O nó de leitura do **mesmo** workflow (`Buscar Linha do Perfil`), lendo a **mes
 
 ### Notificação de atividade com prazo vencendo
 
-`GET /api/cron/atividades-vencendo` (agendado em `vercel.json`, a cada hora) cria uma linha em `notificacoes` para toda atividade não concluída com prazo nas próximas 24h ou já vencido, sem duplicar enquanto a notificação anterior seguir não lida. **Só cria a notificação in-app** — não envia email. A especificação pede o mesmo padrão de alerta do W9 (email com link direto), mas isso é um novo fluxo de envio dentro do n8n, fora do que uma rota Next.js sozinha resolve; fica registrado como próximo passo.
+`GET /api/cron/atividades-vencendo` (agendado em `vercel.json`, uma vez por dia — o plano Hobby do Vercel não permite cron mais frequente que diário) cria uma linha em `notificacoes` para toda atividade não concluída com prazo nas próximas 24h ou já vencido, sem duplicar enquanto a notificação anterior seguir não lida. **Só cria a notificação in-app** — não envia email. A especificação pede o mesmo padrão de alerta do W9 (email com link direto), mas isso é um novo fluxo de envio dentro do n8n, fora do que uma rota Next.js sozinha resolve; fica registrado como próximo passo.
 
 ### O que ficou de fora desta rodada
 
