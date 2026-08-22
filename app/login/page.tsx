@@ -1,5 +1,5 @@
 import type { Metadata } from 'next'
-import { Logo, Simbolo } from '@/components/Logo'
+import { Logo, Simbolo, MarcaDagua } from '@/components/Logo'
 import { DOMINIO_PERMITIDO } from '@/lib/sessao'
 import { BotaoGoogle } from './BotaoGoogle'
 
@@ -11,24 +11,6 @@ const MOTIVOS: Record<string, string> = {
   falha: 'Não foi possível concluir o login. Tente novamente.',
 }
 
-const DESTAQUES = [
-  {
-    titulo: 'Prospecção sem retrabalho',
-    texto:
-      'Listas da Receita Federal com dedupe automático — ninguém prospecta o mesmo lead duas vezes.',
-  },
-  {
-    titulo: 'Contexto pronto pela IA',
-    texto:
-      'Cada lead chega com dor provável, gancho de abordagem e pesquisa da web já feita.',
-  },
-  {
-    titulo: 'Funil sempre atualizado',
-    texto:
-      'Planilha, Notion e pipeline sincronizados a cada 15 minutos, sem ninguém copiar e colar.',
-  },
-]
-
 export default async function PaginaLogin({
   searchParams,
 }: {
@@ -39,11 +21,14 @@ export default async function PaginaLogin({
 
   return (
     <div className="grid min-h-screen lg:grid-cols-[1.05fr_1fr]">
-      {/* Painel de marca */}
+      {/* Painel de marca — uma frase só, no maior tamanho que couber, sobre o
+          símbolo em marca d'água. A lista de recursos que ficava aqui saiu:
+          quem chega nesta tela já trabalha no time e não precisa ser vendido. */}
       <aside className="relative hidden flex-col justify-between overflow-hidden bg-tinta-950 p-12 lg:flex">
+        <MarcaDagua className="-right-[14%] -bottom-[18%] w-[88%] opacity-[0.09]" />
         <div
           aria-hidden="true"
-          className="pointer-events-none absolute -top-24 -right-24 size-96 rounded-full bg-verde-600/20 blur-3xl"
+          className="pointer-events-none absolute -top-24 -right-24 size-96 rounded-full bg-verde-600/25 blur-3xl"
         />
         <div
           aria-hidden="true"
@@ -52,33 +37,10 @@ export default async function PaginaLogin({
 
         <Logo emFundoEscuro className="relative" />
 
-        <div className="relative max-w-md">
-          <h1 className="font-titulo text-4xl leading-tight font-extrabold text-white">
-            Toda a operação comercial
-            <span className="text-amarelo-400"> em um lugar só.</span>
-          </h1>
-          <p className="mt-4 text-sm leading-relaxed text-tinta-400">
-            Busca, enriquecimento, prospecção, funil e monitoramento — o que
-            antes eram duas ferramentas e uma planilha solta.
-          </p>
-
-          <ul className="mt-10 space-y-5">
-            {DESTAQUES.map((item) => (
-              <li key={item.titulo} className="flex gap-3.5">
-                <span
-                  aria-hidden="true"
-                  className="mt-1.5 size-1.5 shrink-0 rounded-full bg-amarelo-400"
-                />
-                <div>
-                  <p className="text-sm font-semibold text-white">{item.titulo}</p>
-                  <p className="mt-1 text-sm leading-relaxed text-tinta-400">
-                    {item.texto}
-                  </p>
-                </div>
-              </li>
-            ))}
-          </ul>
-        </div>
+        <h1 className="font-titulo relative max-w-3xl text-5xl leading-[1.05] font-extrabold tracking-tight text-balance text-white xl:text-6xl 2xl:text-7xl">
+          Toda a operação comercial
+          <span className="text-amarelo-400"> em um lugar só.</span>
+        </h1>
 
         <p className="relative text-xs text-tinta-500">
           Empresa Júnior de Ciência e Tecnologia da UFABC
@@ -86,17 +48,21 @@ export default async function PaginaLogin({
       </aside>
 
       {/* Painel de acesso */}
-      <main className="flex items-center justify-center bg-white px-6 py-12">
-        <div className="w-full max-w-sm surgir">
+      <main className="relative flex items-center justify-center overflow-hidden bg-white px-6 py-12">
+        {/* No celular o painel escuro some, então a marca d'água aparece aqui
+            para a tela não ficar só formulário. */}
+        <MarcaDagua className="-right-[22%] -bottom-[14%] w-[80%] opacity-[0.05] lg:hidden" />
+
+        <div className="surgir relative w-full max-w-sm">
           <div className="lg:hidden">
             <Logo />
           </div>
 
           <div className="mt-10 lg:mt-0">
             <span className="hidden lg:inline-flex">
-              <Simbolo className="size-10" />
+              <Simbolo className="size-12" />
             </span>
-            <h2 className="mt-5 font-titulo text-2xl font-extrabold text-tinta-900">
+            <h2 className="font-titulo mt-5 text-2xl font-extrabold text-tinta-900">
               Entrar na plataforma
             </h2>
             <p className="mt-2 text-sm text-tinta-500">

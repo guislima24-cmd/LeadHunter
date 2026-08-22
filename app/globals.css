@@ -6,27 +6,30 @@
    Tokens expostos como utilitários do Tailwind v4 via @theme.
    ========================================================================== */
 @theme {
-  /* Verde institucional — cor primária de ação */
-  --color-verde-50:  #e9f8ef;
-  --color-verde-100: #c8ecd7;
-  --color-verde-200: #95dab4;
-  --color-verde-300: #5fc48d;
-  --color-verde-400: #2fae6b;
-  --color-verde-500: #12984f;
-  --color-verde-600: #0b7a3b;
-  --color-verde-700: #095f2f;
-  --color-verde-800: #074524;
-  --color-verde-900: #042c17;
+  /* Verde institucional — cor primária de ação.
+     O 600 e o amarelo 400 são as duas cores da marca, tiradas do símbolo em
+     public/logo-ufabcjr.svg; o resto da escala é derivado delas. Trocar as
+     duas linhas marcadas repinta a plataforma inteira. */
+  --color-verde-50:  #e8f4f0;
+  --color-verde-100: #c5e5db;
+  --color-verde-200: #93cebd;
+  --color-verde-300: #5bb29c;
+  --color-verde-400: #2c957d;
+  --color-verde-500: #0f7c62;
+  --color-verde-600: #00634a; /* ← verde da marca */
+  --color-verde-700: #004f3b;
+  --color-verde-800: #003a2b;
+  --color-verde-900: #00251c;
 
   /* Amarelo institucional — destaque e sinalização */
-  --color-amarelo-50:  #fff9e6;
-  --color-amarelo-100: #ffefb8;
-  --color-amarelo-200: #ffe383;
-  --color-amarelo-300: #ffd64d;
-  --color-amarelo-400: #ffc81f;
-  --color-amarelo-500: #f5b800;
-  --color-amarelo-600: #c99400;
-  --color-amarelo-700: #9c7200;
+  --color-amarelo-50:  #fff9e3;
+  --color-amarelo-100: #fff0b4;
+  --color-amarelo-200: #ffe57a;
+  --color-amarelo-300: #ffdb3d;
+  --color-amarelo-400: #ffd100; /* ← amarelo da marca */
+  --color-amarelo-500: #e8bd00;
+  --color-amarelo-600: #bd9a00;
+  --color-amarelo-700: #8f7400;
 
   /* Neutros — do branco ao preto */
   --color-tinta-0:   #ffffff;

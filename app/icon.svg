@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120" role="img" aria-label="UFABC Júnior">
+  <title>UFABC Júnior</title>
+  <defs>
+    <clipPath id="ufabcjr-contorno">
+      <path d="M 69.60 24.67 L 110.40 95.33 A 11.09 11.09 0 0 1 100.80 111.96 L 19.20 111.96 A 11.09 11.09 0 0 1 9.60 95.33 L 50.40 24.67 A 11.09 11.09 0 0 1 69.60 24.67 Z"/>
+    </clipPath>
+  </defs>
+  <g clip-path="url(#ufabcjr-contorno)">
+    <path fill="#ffd100" fill-rule="evenodd" d="M 60.00 8.04 L 120.00 111.96 L 0.00 111.96 Z M 49.10 47.37 L 39.51 101.73 L 91.39 82.85 Z"/>
+    <path fill="#00634a" d="M 100.80 78.71 L 120.00 111.96 L 91.39 82.85 Z"/>
+    <path fill="#00634a" d="M 38.40 111.96 L 0.00 111.96 L 39.51 101.73 Z"/>
+    <path fill="#00634a" d="M 40.80 41.29 L 60.00 8.04 L 49.10 47.37 Z"/>
+  </g>
+</svg>

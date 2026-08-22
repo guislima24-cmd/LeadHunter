@@ -1,33 +1,25 @@
+/* eslint-disable @next/next/no-img-element -- o símbolo é um SVG estático de
+   menos de 1 KB: o next/image não tem o que otimizar nele, e passaria a exigir
+   width/height fixos justo onde as telas variam o tamanho por classe. */
 import { cn } from '@/lib/cn'
 
 /**
  * Marca do Núcleo Comercial.
  *
- * O símbolo é um desenho próprio nas cores institucionais (verde/amarelo).
- * Para usar o logotipo oficial da UFABC Júnior, coloque o arquivo em
- * `public/logo-ufabcjr.svg` e troque o <svg> abaixo por
- * `<Image src="/logo-ufabcjr.svg" ... />` — o resto do layout não muda.
+ * O símbolo vem de `public/logo-ufabcjr.svg` em vez de estar embutido aqui:
+ * trocar o arquivo troca a marca em todo lugar que a usa (barra lateral,
+ * login, tela de erro, favicon em `app/icon.svg`) sem mexer em componente
+ * nenhum. O SVG tem `viewBox` quadrada com o triângulo centralizado, então
+ * as classes `size-*` continuam valendo como valiam no desenho anterior.
  */
 export function Simbolo({ className }: { className?: string }) {
   return (
-    <svg
-      viewBox="0 0 32 32"
-      role="img"
-      aria-label="UFABC Júnior"
+    <img
+      src="/logo-ufabcjr.svg"
+      alt=""
+      aria-hidden="true"
       className={cn('size-8 shrink-0', className)}
-    >
-      <rect width="32" height="32" rx="8" className="fill-verde-600" />
-      {/* Traço ascendente: prospecção que evolui pelo funil */}
-      <path
-        d="M8 20.5 13.5 15l4 4L24 12"
-        fill="none"
-        strokeWidth="2.5"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        className="stroke-amarelo-400"
-      />
-      <circle cx="24" cy="12" r="2.75" className="fill-amarelo-400" />
-    </svg>
+    />
   )
 }
 
@@ -64,5 +56,22 @@ export function Logo({
         </span>
       )}
     </span>
+  )
+}
+
+/**
+ * Símbolo gigante e apagado no fundo de uma seção — a marca d'água do login.
+ *
+ * Fica em `aria-hidden` e `pointer-events-none`: é textura, não conteúdo, e
+ * não pode interceptar clique de nada que esteja por cima.
+ */
+export function MarcaDagua({ className }: { className?: string }) {
+  return (
+    <img
+      src="/logo-ufabcjr.svg"
+      alt=""
+      aria-hidden="true"
+      className={cn('pointer-events-none absolute select-none', className)}
+    />
   )
 }
