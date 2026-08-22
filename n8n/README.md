@@ -264,7 +264,11 @@ Além da aba do membro na planilha (como sempre fez), o nó novo **Gravar Organi
 
 Resolve `criado_por_email` fazendo `member_profiles.aba_planilha = membro` (o payload da extensão manda o nome da aba, não o email) — se a aba não corresponder a nenhum membro cadastrado, a gravação no CRM é pulada silenciosamente (nada quebra, só não gera organização/contato).
 
-**Bug de produção encontrado durante o teste, não relacionado a esta mudança:** a credencial `Google Sheets account` (`y7Qjl9cVell53bFu`), usada pelo nó `Gravar na Aba do Membro`, está com o token OAuth inválido (`Unable to sign without access token`) — toda captura de LinkedIn está caindo no branch de erro (`Responder Erro de Planilha`, HTTP 422) para quem usa essa credencial. Precisa reconectar a conta na UI do n8n (Credentials → Google Sheets account → Reconectar), mesma correção já feita antes para o Gmail.
+**Bug de produção encontrado durante o teste e já corrigido:** o nó `Gravar na Aba do Membro` usava a credencial `Google Sheets account` (`y7Qjl9cVell53bFu`), cujo token OAuth está inválido (`Unable to sign without access token`) — toda captura de LinkedIn caía no branch de erro (`Responder Erro de Planilha`, HTTP 422).
+
+O nó de leitura do **mesmo** workflow (`Buscar Linha do Perfil`), lendo a **mesma** planilha, já usava `Google Sheets account 3` (`UFpfZzKr5o3LOeKw`), que está saudável e é a credencial que o W5 também usa. A escrita foi apontada para ela: resolve o 422 sem depender de reconectar OAuth e elimina a incoerência de um workflow ler e escrever a mesma planilha com contas diferentes. Verificado com execução real — `Responder Sucesso`, linha gravada na aba.
+
+`Google Sheets account` (`y7Qjl9cVell53bFu`) ficou órfã: nenhum nó de nenhum workflow a referencia mais. Dá para reconectar na UI do n8n se quiser reaproveitá-la, ou excluir.
 
 ### Notificação de atividade com prazo vencendo
 
