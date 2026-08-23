@@ -28,6 +28,9 @@ workflows com a identidade certa e mostra o resultado.
 | `/listas` · `/listas/[id]` | Listas geradas, enriquecimento por lead e disparo da prospecção por email | W2, W3 |
 | `/maps` | Prospecção de negócios locais por setor e cidade, com análise da IA | W5 |
 | `/pipeline` | Redireciona para `/` — o quadro deixou de ter aba própria | — |
+| `/precificacao` | Orçamentos abertos e o resumo da régua de preço | — |
+| `/precificacao/[id]` | Calculadora do orçamento: serviços, esforço, complexidade do escopo e os três níveis de preço | — |
+| `/precificacao/referencia` | A régua editável — taxa/hora por porte, pontos de complexidade, capacidade e impostos — **só administradores** | — |
 | `/monitoramento` | Falhas das automações e consumo de Tavily/Maps — **só administradores** | W9 |
 
 ## Como rodar
@@ -105,6 +108,8 @@ lib/
   sessao.ts          quem está logado e o que pode fazer
   n8n.ts             chamadas aos webhooks
   dados.ts           leituras da plataforma
+  precificacao.ts    a fórmula do orçamento (mesma no cliente e no servidor)
+  orcamentos.ts      leituras do módulo de precificação
 n8n/                 documentação e SQL das automações
 proxy.ts             sessão + bloqueio de acesso anônimo
 ```

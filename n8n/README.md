@@ -289,6 +289,40 @@ O nó de leitura do **mesmo** workflow (`Buscar Linha do Perfil`), lendo a **mes
 
 `GET /api/cron/atividades-vencendo` (agendado em `vercel.json`, uma vez por dia — o plano Hobby do Vercel não permite cron mais frequente que diário) cria uma linha em `notificacoes` para toda atividade não concluída com prazo nas próximas 24h ou já vencido, sem duplicar enquanto a notificação anterior seguir não lida. **Só cria a notificação in-app** — não envia email. A especificação pede o mesmo padrão de alerta do W9 (email com link direto), mas isso é um novo fluxo de envio dentro do n8n, fora do que uma rota Next.js sozinha resolve; fica registrado como próximo passo.
 
+## Precificação
+
+Implementação de `leadhunter-crm-precificacao-prd.md` — a calculadora de proposta que o time mantinha numa página HTML avulsa, trazida para dentro do CRM e ligada ao funil. Schema em `sql/009_crm_portes_catalogo_historico.sql` e `sql/010_crm_precificacao.sql`, aplicados em 23/08/2026 no projeto `dulpeemmwhudcjqwbolr`.
+
+A fórmula não virou função Postgres, ao contrário do resto do CRM: ela precisa rodar no navegador para dar prévia ao vivo enquanto se mexe nos controles. Vive em `lib/precificacao.ts`, sem `server-only`, e é importada pelos dois lados — a tela para mostrar, `PATCH /api/crm/precificacao/orcamentos/[id]` para gravar. A rota **sempre recalcula a partir dos parâmetros do banco** e ignora qualquer valor que o cliente mande: senão bastaria um `fetch` à mão para gravar o preço que se quisesse.
+
+### 009 — os pré-requisitos que faltavam
+
+A Seção 14 do PRD assume três coisas que nunca tinham sido criadas:
+
+- **`portes_empresa`** — 7 portes com `taxa_hora_padrao`, mais `organizacoes.porte_empresa_id`. Só três faixas de taxa apareciam na calculadora antiga (180 / 250 / 320); os portes sem taxa própria (Empresa Júnior, Para abrir, Indefinido) receberam a menor, 180. Erra para baixo de propósito — cobrar a menos de um cliente pequeno é recuperável, e o número é editável na tela de referência.
+- **Catálogo de serviços** — de 4 para 22. Os 4 que já existiam foram **renomeados no lugar**, não recriados, para que as FKs de negócios em andamento continuassem válidas.
+- **Histórico** — 242 projetos do PDF "Banco de Dados de Projetos UFABC Jr." em `historico_precificacao`, com 282 vínculos em `historico_precificacao_servicos` (0 órfãos). A extração foi feita por coordenada de palavra (`pdftotext -bbox-layout`), não pelo modo `-layout`: nomes de serviço longos transbordavam a célula e colavam no ano da linha vizinha, chegando a fundir dois registros. 18 linhas em que o nome do projeto ficou interleavado no texto do serviço foram conferidas à mão contra o layout original.
+
+`vw_ticket_medio_servico` fecha a média por serviço, mas **só conta projeto de um serviço só**: num projeto que empacotou vários por um preço fechado não há como saber quanto coube a cada um, e ratear inventaria uma precisão que o dado não tem. A view expõe `amostra` junto com a média para que a tela possa qualificar um número apoiado em poucos projetos. As bases maiores são Pesquisa de Mercado — Secundária (73), Plano de Negócios (23), Mapeamento de Processos (20) e Estruturação Comercial (14).
+
+### 010 — a régua e os orçamentos
+
+`precificacao_parametros_globais` (linha única, `id boolean primary key default true`), `precificacao_faixas_capacidade` (5 faixas, 0,75× a 1,30×), `precificacao_dimensoes` + `precificacao_dimensao_opcoes` (11 dimensões, 25 opções) e o orçamento em si: `negocio_orcamentos` → `negocio_orcamento_itens` → `negocio_orcamento_item_valores`.
+
+As dimensões são dados, não código — a tela de orçamento monta o formulário a partir delas. Três tipos:
+
+| Tipo | Como entra na conta | Exemplo |
+|---|---|---|
+| `selecao_unica` | soma pontos percentuais; o markup é `1 + pontos/100` | Complexidade do Setor: 0 / 20 / 40 |
+| `contagem_linear` | multiplica por `1 + ((valor − mínimo) × incremento)/100` | Entrevistados, 1 a 20, 5,263158% cada (= 100/19, reproduz o `1 + (n−1)/19` da calculadora antiga) |
+| `contagem_valor_fixo` | soma `valor × valor_unitário` **depois** dos multiplicadores | POPs a R$ 200 cada |
+
+A ordem importa: custo fixo entra depois da complexidade e da capacidade, senão um POP de R$ 200 sairia por R$ 350 num escopo complexo. O imposto fecha a conta por **divisão** — `subtotal / ((100 − imposto)/100)` —, não por soma, que é o erro comum de embutir imposto e sair com margem menor que a pretendida.
+
+`limiar_desvio_percentual` (padrão 40) é coluna, não constante: é a partir de quanta diferença para o histórico o orçamento avisa que o preço está fora do padrão, e esse é um número de política comercial, que muda sem deploy.
+
+Finalizar um orçamento grava `negocios.valor` e aponta `produto_servico_id` para o item de maior valor. Orçamento finalizado não recalcula: ele guardou o próprio cálculo, então mexer na régua depois muda os orçamentos novos e deixa o histórico intacto. Apagar só é possível enquanto for rascunho.
+
 ### O que ficou de fora desta rodada
 
 - **UI/telas** — fora de escopo por decisão explícita da especificação (Seção 7 dela: "Telas, layout e componentes de UI ficam para uma etapa posterior").

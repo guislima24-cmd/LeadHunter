@@ -65,6 +65,17 @@ export const NAVEGACAO: ItemNavegacao[] = [
     ),
   },
   {
+    href: '/precificacao',
+    rotulo: 'Precificação',
+    descricao: 'Orçamento e régua de preço',
+    icone: (
+      <svg viewBox="0 0 24 24" {...props}>
+        <path d="M20.6 13.4 13.4 20.6a2 2 0 0 1-2.8 0l-7.2-7.2A2 2 0 0 1 2.8 12V4.8A2 2 0 0 1 4.8 2.8H12a2 2 0 0 1 1.4.6l7.2 7.2a2 2 0 0 1 0 2.8Z" />
+        <path d="M7.5 7.5h.01" />
+      </svg>
+    ),
+  },
+  {
     href: '/monitoramento',
     rotulo: 'Monitoramento',
     descricao: 'Falhas e custos',

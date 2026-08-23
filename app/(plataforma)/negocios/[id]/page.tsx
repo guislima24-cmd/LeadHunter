@@ -6,6 +6,7 @@ import { Badge } from '@/components/ui/Badge'
 import { EtapasDoNegocio } from '@/components/crm/EtapasDoNegocio'
 import { DetalhesNegocio } from '@/components/crm/DetalhesNegocio'
 import { LinhaDoTempo } from '@/components/crm/LinhaDoTempo'
+import { NovoOrcamento } from '@/components/crm/NovoOrcamento'
 import { exigirMembro } from '@/lib/sessao'
 import {
   obterNegocio,
@@ -19,11 +20,16 @@ import {
   listarTiposAtividade,
 } from '@/lib/crm'
 import {
+  listarOrcamentosDoNegocio,
+  obterCatalogoPrecificacao,
+} from '@/lib/orcamentos'
+import {
   formatarCNPJ,
   formatarData,
   formatarDataHora,
   formatarReais,
   formatarTelefone,
+  tempoRelativo,
 } from '@/lib/formato'
 
 export async function generateMetadata({
@@ -73,6 +79,11 @@ export default async function PaginaNegocio({
     obterHistoricoDeEtapas(negocio.id),
     // Só o admin troca o dono, então só ele precisa da lista de membros.
     membro.papel === 'admin' ? listarMembrosAtivos() : Promise.resolve([]),
+  ])
+
+  const [orcamentos, catalogo] = await Promise.all([
+    listarOrcamentosDoNegocio(negocio.id),
+    obterCatalogoPrecificacao(),
   ])
 
   return (
@@ -263,6 +274,59 @@ export default async function PaginaNegocio({
                         </a>
                       )}
                     </p>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </Card>
+
+          <Card>
+            <CardCabecalho
+              titulo="Orçamentos"
+              descricao="Como se chegou no valor do negócio. Finalizar um orçamento grava o preço escolhido aqui."
+              acao={
+                <NovoOrcamento
+                  negocios={[
+                    {
+                      id: negocio.id,
+                      titulo: negocio.titulo,
+                      organizacaoNome: negocio.organizacaoNome,
+                      porteEmpresaId: null,
+                    },
+                  ]}
+                  portes={catalogo.portes}
+                  faixas={catalogo.faixas}
+                  negocioFixo={negocio.id}
+                />
+              }
+            />
+            {orcamentos.length === 0 ? (
+              <p className="px-5 py-6 text-center text-xs text-tinta-500">
+                Nenhum orçamento para este negócio ainda.
+              </p>
+            ) : (
+              <ul className="divide-y divide-tinta-100">
+                {orcamentos.map((o) => (
+                  <li key={o.id}>
+                    <Link
+                      href={`/precificacao/${o.id}`}
+                      className="flex items-baseline justify-between gap-3 px-5 py-3 transition-colors hover:bg-tinta-50"
+                    >
+                      <span className="min-w-0">
+                        <span className="numerico block text-sm font-semibold text-tinta-900">
+                          {o.valorIdeal == null ? '—' : formatarReais(o.valorIdeal)}
+                        </span>
+                        <span className="block text-xs text-tinta-500">
+                          {o.quantidadeItens === 1
+                            ? '1 serviço'
+                            : `${o.quantidadeItens} serviços`}{' '}
+                          · {tempoRelativo(o.atualizadoEm)}
+                        </span>
+                      </span>
+                      <Badge tom={o.status === 'finalizado' ? 'verde' : 'contorno'}>
+                        {o.status === 'finalizado' ? 'Finalizado' : 'Rascunho'}
+                      </Badge>
+                    </Link>
                   </li>
                 ))}
               </ul>
