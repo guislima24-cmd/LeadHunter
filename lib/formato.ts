@@ -38,6 +38,19 @@ export function formatarReais(valor: number | null | undefined): string {
   }).format(valor)
 }
 
+/** Para eixos de gráfico, onde "R$ 142.500" não cabe: "R$ 143 mil". */
+export function formatarReaisCompacto(valor: number | null | undefined): string {
+  if (valor == null || Number.isNaN(valor)) return '—'
+  if (valor === 0) return 'R$ 0'
+  if (Math.abs(valor) >= 1_000_000) {
+    return `R$ ${new Intl.NumberFormat('pt-BR', { maximumFractionDigits: 1 }).format(valor / 1_000_000)} mi`
+  }
+  if (Math.abs(valor) >= 1000) {
+    return `R$ ${new Intl.NumberFormat('pt-BR', { maximumFractionDigits: 0 }).format(valor / 1000)} mil`
+  }
+  return formatarReais(valor)
+}
+
 export function formatarPercentual(valor: number | null | undefined): string {
   if (valor == null || Number.isNaN(valor)) return '—'
   return `${new Intl.NumberFormat('pt-BR', { maximumFractionDigits: 1 }).format(valor)}%`

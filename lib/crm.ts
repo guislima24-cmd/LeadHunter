@@ -207,6 +207,169 @@ function inicioDoMesCorrente(): string {
   return d.toISOString()
 }
 
+export interface EtapaAlcancada {
+  etapa: string
+  quantidade: number
+  /** Percentual que sobreviveu da etapa anterior. `null` na primeira. */
+  conversao: number | null
+}
+
+export interface MesFechado {
+  mes: string
+  ganhos: number
+  perdidos: number
+}
+
+export interface FatiaOrigem {
+  origem: string
+  quantidade: number
+}
+
+export interface PainelFunil {
+  etapasAlcancadas: EtapaAlcancada[]
+  valorPorEtapa: Array<{ etapa: string; valor: number }>
+  fechadosPorMes: MesFechado[]
+  origens: FatiaOrigem[]
+  ticketMedioGanhoMes: number | null
+}
+
+const MESES_NO_GRAFICO = 6
+
+/**
+ * Números que alimentam os gráficos do funil.
+ *
+ * Agrega em JavaScript em vez de SQL porque `negocios` é a tabela pequena do
+ * projeto — nasce de decisão humana (promover um lead ou criar um negócio),
+ * então são dezenas ou centenas de linhas, não os 1,6 milhão de `leads`.
+ * Somar isso aqui evita mais uma view para manter em sincronia.
+ *
+ * O funil de conversão sai de `negocio_etapa_historico`, não da etapa atual:
+ * a pergunta é "quantos negócios já chegaram até aqui", e um negócio que hoje
+ * está em Contrato passou por todas as anteriores. Contar pela etapa atual
+ * daria um gráfico onde etapa cheia significa negócio parado, não avanço.
+ */
+export async function obterPainelDoFunil(): Promise<PainelFunil> {
+  const admin = criarClienteAdmin()
+
+  const [{ data: etapas }, { data: negocios }, { data: historico }] =
+    await Promise.all([
+      admin
+        .from('etapas_funil')
+        .select('id, nome, ordem')
+        .eq('ativo', true)
+        .order('ordem', { ascending: true }),
+      admin
+        .from('negocios')
+        .select('id, etapa_id, status, valor, fechado_em, origem, organizacao_id'),
+      admin.from('negocio_etapa_historico').select('negocio_id, etapa_id'),
+    ])
+
+  const listaEtapas = etapas ?? []
+  const listaNegocios = negocios ?? []
+
+  // --- funil de conversão -------------------------------------------------
+  const alcancaramPorEtapa = new Map<string, Set<string>>()
+  for (const linha of historico ?? []) {
+    const etapaId = linha.etapa_id as string
+    if (!alcancaramPorEtapa.has(etapaId)) alcancaramPorEtapa.set(etapaId, new Set())
+    alcancaramPorEtapa.get(etapaId)!.add(linha.negocio_id as string)
+  }
+
+  const etapasAlcancadas: EtapaAlcancada[] = listaEtapas.map((etapa, indice) => {
+    const quantidade = alcancaramPorEtapa.get(etapa.id as string)?.size ?? 0
+    const anterior =
+      indice === 0
+        ? null
+        : (alcancaramPorEtapa.get(listaEtapas[indice - 1].id as string)?.size ?? 0)
+    return {
+      etapa: etapa.nome as string,
+      quantidade,
+      conversao: anterior ? (quantidade / anterior) * 100 : null,
+    }
+  })
+
+  // --- valor em aberto por etapa ------------------------------------------
+  const valorPorEtapa = listaEtapas.map((etapa) => ({
+    etapa: etapa.nome as string,
+    valor: listaNegocios
+      .filter((n) => n.status === 'aberto' && n.etapa_id === etapa.id)
+      .reduce((soma, n) => soma + Number(n.valor ?? 0), 0),
+  }))
+
+  // --- ganhos x perdidos por mês ------------------------------------------
+  const rotuloMes = new Intl.DateTimeFormat('pt-BR', { month: 'short' })
+  const baldes = new Map<string, MesFechado>()
+  const agora = new Date()
+  for (let i = MESES_NO_GRAFICO - 1; i >= 0; i--) {
+    const d = new Date(agora.getFullYear(), agora.getMonth() - i, 1)
+    baldes.set(chaveDoMes(d), {
+      mes: rotuloMes.format(d).replace('.', ''),
+      ganhos: 0,
+      perdidos: 0,
+    })
+  }
+  for (const n of listaNegocios) {
+    if (!n.fechado_em || (n.status !== 'ganho' && n.status !== 'perdido')) continue
+    const balde = baldes.get(chaveDoMes(new Date(n.fechado_em as string)))
+    if (!balde) continue
+    if (n.status === 'ganho') balde.ganhos += 1
+    else balde.perdidos += 1
+  }
+
+  // --- origem dos negócios -------------------------------------------------
+  // Google Maps não entra: o W5 grava o resultado só na planilha, então não há
+  // como contar por aqui sem inventar número.
+  const semCnpj = new Set<string>()
+  const idsDePromocao = listaNegocios
+    .filter((n) => n.origem === 'promocao_lead')
+    .map((n) => n.organizacao_id as string)
+  if (idsDePromocao.length > 0) {
+    const { data: orgs } = await admin
+      .from('organizacoes')
+      .select('id, cnpj')
+      .in('id', [...new Set(idsDePromocao)])
+    for (const o of orgs ?? []) if (!o.cnpj) semCnpj.add(o.id as string)
+  }
+
+  const contagemOrigem = { base: 0, captura: 0, manual: 0 }
+  for (const n of listaNegocios) {
+    if (n.origem !== 'promocao_lead') contagemOrigem.manual += 1
+    else if (semCnpj.has(n.organizacao_id as string)) contagemOrigem.captura += 1
+    else contagemOrigem.base += 1
+  }
+  const origens: FatiaOrigem[] = [
+    { origem: 'Base da Receita', quantidade: contagemOrigem.base },
+    { origem: 'Captura no LinkedIn', quantidade: contagemOrigem.captura },
+    { origem: 'Criado à mão', quantidade: contagemOrigem.manual },
+  ].filter((f) => f.quantidade > 0)
+
+  // --- ticket médio dos ganhos do mês --------------------------------------
+  const desde = inicioDoMesCorrente()
+  const ganhosComValor = listaNegocios.filter(
+    (n) =>
+      n.status === 'ganho' &&
+      n.fechado_em != null &&
+      String(n.fechado_em) >= desde &&
+      n.valor != null,
+  )
+  const ticketMedioGanhoMes =
+    ganhosComValor.length === 0
+      ? null
+      : ganhosComValor.reduce((s, n) => s + Number(n.valor), 0) / ganhosComValor.length
+
+  return {
+    etapasAlcancadas,
+    valorPorEtapa,
+    fechadosPorMes: [...baldes.values()],
+    origens,
+    ticketMedioGanhoMes,
+  }
+}
+
+function chaveDoMes(d: Date): string {
+  return `${d.getFullYear()}-${d.getMonth()}`
+}
+
 export interface NegocioDoLead {
   negocioId: string
   titulo: string

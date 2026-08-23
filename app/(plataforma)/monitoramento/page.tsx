@@ -6,7 +6,7 @@ import { Badge } from '@/components/ui/Badge'
 import { Tabela, Th, Td, Tr } from '@/components/ui/Tabela'
 import { EstadoVazio } from '@/components/ui/Estado'
 import { exigirMembro } from '@/lib/sessao'
-import { obterMonitoramento } from '@/lib/dados'
+import { obterMonitoramento, obterResumoInicio } from '@/lib/dados'
 import {
   formatarNumero,
   formatarPercentual,
@@ -26,7 +26,10 @@ export default async function PaginaMonitoramento() {
   const membro = await exigirMembro()
   if (membro.papel !== 'admin') notFound()
 
-  const painel = await obterMonitoramento()
+  const [painel, resumo] = await Promise.all([
+    obterMonitoramento(),
+    obterResumoInicio(membro.abaPlanilha),
+  ])
 
   const percentualTavily = (painel.tavilyCreditosMes / COTA_TAVILY_MES) * 100
   const tomTavily =
@@ -56,9 +59,9 @@ export default async function PaginaMonitoramento() {
           apoio={`de ${formatarNumero(COTA_TAVILY_MES)} no mês`}
         />
         <Metrica
-          rotulo="Leads enriquecidos"
+          rotulo="Enriquecidos no mês"
           valor={formatarNumero(painel.tavilyLeadsMes)}
-          apoio="que consumiram cota da Tavily"
+          apoio="consumiram cota da Tavily desde o dia 1º"
         />
         <Metrica
           rotulo="Ainda cabem"
@@ -116,6 +119,31 @@ export default async function PaginaMonitoramento() {
         </Card>
 
         <div className="space-y-6">
+          <Card>
+            <CardCabecalho
+              titulo="Enriquecimento com IA"
+              descricao="Acumulado em toda a base de leads da Receita Federal — não só o mês."
+            />
+            <div className="space-y-3 p-5">
+              <div className="flex items-center justify-between gap-3">
+                <span className="text-sm text-tinta-600">Concluídos</span>
+                <Badge tom="verde">{formatarNumero(resumo.enriquecidos)}</Badge>
+              </div>
+              <div className="flex items-center justify-between gap-3">
+                <span className="text-sm text-tinta-600">Aguardando cota</span>
+                <Badge
+                  tom={resumo.pendentesEnriquecimento > 0 ? 'amarelo' : 'neutro'}
+                >
+                  {formatarNumero(resumo.pendentesEnriquecimento)}
+                </Badge>
+              </div>
+              <p className="border-t border-tinta-100 pt-3 text-xs leading-relaxed text-tinta-500">
+                Leads marcados como <em>aguardando cota</em> voltam a ser
+                enriquecidos assim que o limite mensal da Tavily renovar.
+              </p>
+            </div>
+          </Card>
+
           <Card>
             <CardCabecalho
               titulo="Cota da Tavily"

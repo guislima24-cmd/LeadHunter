@@ -1,62 +1,41 @@
 import Link from 'next/link'
 import { Cabecalho } from '@/components/layout/Cabecalho'
 import { Card, CardCabecalho } from '@/components/ui/Card'
-import { Metrica, Barra } from '@/components/ui/Metrica'
-import { Badge } from '@/components/ui/Badge'
+import { Metrica } from '@/components/ui/Metrica'
 import { EstadoVazio } from '@/components/ui/Estado'
 import { Tabela, Th, Td, Tr } from '@/components/ui/Tabela'
 import { QuadroNegocios } from '@/components/crm/QuadroNegocios'
 import { NovoNegocio } from '@/components/crm/NovoNegocio'
+import { PainelGraficos } from '@/components/crm/PainelGraficos'
 import { exigirMembro } from '@/lib/sessao'
 import { obterResumoInicio, obterFunilDoMembro } from '@/lib/dados'
 import {
   obterQuadroDeNegocios,
+  obterPainelDoFunil,
   listarMotivosPerda,
   listarOrganizacoes,
   listarProdutosServicos,
 } from '@/lib/crm'
-import {
-  formatarNumero,
-  formatarPercentual,
-  formatarReais,
-  tempoRelativo,
-} from '@/lib/formato'
+import { formatarNumero, formatarReais, tempoRelativo } from '@/lib/formato'
 
 export const metadata = { title: 'Início' }
 
-const ATALHOS = [
-  {
-    href: '/buscar',
-    titulo: 'Buscar leads',
-    texto: 'Filtre a base da Receita Federal e gere uma lista já sem duplicados.',
-  },
-  {
-    href: '/maps',
-    titulo: 'Prospectar no Maps',
-    texto: 'Encontre negócios locais por setor e cidade, com análise da IA.',
-  },
-  {
-    href: '/listas',
-    titulo: 'Minhas listas',
-    texto: 'Enriqueça, dispare a prospecção e promova leads a negócio.',
-  },
-]
-
 /**
- * Início da plataforma: o quadro de negócios primeiro, o resto depois.
+ * Início da plataforma: o quadro de negócios primeiro, os gráficos do funil
+ * logo abaixo e o volume bruto da prospecção por último.
  *
- * O funil é o que responde "como estamos agora"; volume de leads, listas e
- * enriquecimento são o que alimenta o funil, e por isso passaram a viver
- * abaixo dele em vez de disputar o topo da tela. `/pipeline` continua
- * existindo, mas só redireciona para cá — o quadro não tem mais aba própria.
+ * O funil é o que responde "como estamos agora"; leads, listas e
+ * enriquecimento são o que o alimenta. `/pipeline` continua existindo, mas só
+ * redireciona para cá — o quadro não tem mais aba própria.
  */
 export default async function PaginaInicio() {
   const membro = await exigirMembro()
 
-  const [resumo, quadro, motivosPerda, organizacoes, produtos, funilLeads] =
+  const [resumo, quadro, painel, motivosPerda, organizacoes, produtos, funilLeads] =
     await Promise.all([
       obterResumoInicio(membro.abaPlanilha),
       obterQuadroDeNegocios(),
+      obterPainelDoFunil(),
       listarMotivosPerda(),
       listarOrganizacoes(),
       listarProdutosServicos(),
@@ -64,7 +43,7 @@ export default async function PaginaInicio() {
     ])
 
   const primeiroNome = membro.nome.split(' ')[0] || membro.nome
-  const topoLeads = funilLeads[0]?.quantidade ?? 0
+  const houveNegocio = painel.etapasAlcancadas.some((e) => e.quantidade > 0)
 
   return (
     <>
@@ -92,9 +71,17 @@ export default async function PaginaInicio() {
           destaque={quadro.ganhosNoMes > 0}
         />
         <Metrica
-          rotulo="Perdidos no mês"
-          valor={formatarNumero(quadro.perdidosNoMes)}
-          apoio="com motivo registrado"
+          rotulo="Ticket médio ganho"
+          valor={
+            painel.ticketMedioGanhoMes == null
+              ? '—'
+              : formatarReais(painel.ticketMedioGanhoMes)
+          }
+          apoio={
+            painel.ticketMedioGanhoMes == null
+              ? 'nenhum ganho com valor no mês'
+              : `média dos ${formatarNumero(quadro.ganhosNoMes)} fechados no mês`
+          }
         />
       </section>
 
@@ -138,6 +125,30 @@ export default async function PaginaInicio() {
         )}
       </div>
 
+      {/* O painel aparece assim que existe histórico, mesmo sem negócio aberto
+          — mês fechado inteiro em ganho/perdido ainda é o que se quer ver. */}
+      {houveNegocio && (
+        <section className="mt-10">
+          <div className="mb-4 border-b border-tinta-200 pb-3">
+            <h2 className="font-titulo text-lg font-extrabold text-tinta-900">
+              O funil em números
+            </h2>
+            <p className="mt-0.5 text-sm text-tinta-500">
+              Onde os negócios travam, quanto está em jogo em cada etapa e o que
+              vem antes deles.
+            </p>
+          </div>
+
+          <PainelGraficos
+            etapasAlcancadas={painel.etapasAlcancadas}
+            valorPorEtapa={painel.valorPorEtapa}
+            fechadosPorMes={painel.fechadosPorMes}
+            origens={painel.origens}
+            funilLeads={funilLeads}
+          />
+        </section>
+      )}
+
       <section className="mt-10">
         <div className="mb-4 border-b border-tinta-200 pb-3">
           <h2 className="font-titulo text-lg font-extrabold text-tinta-900">
@@ -172,179 +183,64 @@ export default async function PaginaInicio() {
           />
         </div>
 
-        <div className="mt-6 grid gap-6 lg:grid-cols-3">
-          <Card className="lg:col-span-2">
-            <CardCabecalho
-              titulo="Últimas listas geradas"
-              descricao="As cinco mais recentes criadas por você."
+        <Card className="mt-6">
+          <CardCabecalho
+            titulo="Últimas listas geradas"
+            descricao="As cinco mais recentes criadas por você."
+            acao={
+              <Link
+                href="/listas"
+                className="text-xs font-semibold text-verde-700 hover:text-verde-800 hover:underline"
+              >
+                Ver todas
+              </Link>
+            }
+          />
+          {resumo.ultimasListas.length === 0 ? (
+            <EstadoVazio
+              titulo="Nenhuma lista ainda"
+              descricao="Gere sua primeira lista na busca — os leads ficam reservados no seu nome por 24 horas."
               acao={
                 <Link
-                  href="/listas"
-                  className="text-xs font-semibold text-verde-700 hover:text-verde-800 hover:underline"
+                  href="/buscar"
+                  className="inline-flex h-9 items-center rounded-lg bg-verde-600 px-4 text-sm font-semibold text-white transition-colors hover:bg-verde-700"
                 >
-                  Ver todas
+                  Buscar leads
                 </Link>
               }
             />
-            {resumo.ultimasListas.length === 0 ? (
-              <EstadoVazio
-                titulo="Nenhuma lista ainda"
-                descricao="Gere sua primeira lista na busca — os leads ficam reservados no seu nome por 24 horas."
-                acao={
-                  <Link
-                    href="/buscar"
-                    className="inline-flex h-9 items-center rounded-lg bg-verde-600 px-4 text-sm font-semibold text-white transition-colors hover:bg-verde-700"
-                  >
-                    Buscar leads
-                  </Link>
-                }
-              />
-            ) : (
-              <Tabela>
-                <thead>
-                  <tr>
-                    <Th>Setor</Th>
-                    <Th>Cidade</Th>
-                    <Th className="text-right">Leads</Th>
-                    <Th>Criada</Th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {resumo.ultimasListas.map((lista) => (
-                    <Tr key={lista.id}>
-                      <Td>
-                        <Link
-                          href={`/listas/${lista.id}`}
-                          className="font-semibold text-tinta-900 hover:text-verde-700 hover:underline"
-                        >
-                          {lista.setor || 'Sem setor'}
-                        </Link>
-                      </Td>
-                      <Td className="text-tinta-600">{lista.cidade || '—'}</Td>
-                      <Td className="numerico text-right font-semibold">
-                        {formatarNumero(lista.quantidadeLeads)}
-                      </Td>
-                      <Td className="text-tinta-500">
-                        {tempoRelativo(lista.criadaEm)}
-                      </Td>
-                    </Tr>
-                  ))}
-                </tbody>
-              </Tabela>
-            )}
-          </Card>
-
-          <div className="space-y-6">
-            <Card>
-              <CardCabecalho
-                titulo="Enriquecimento com IA"
-                descricao="Status do W2 na base inteira."
-              />
-              <div className="space-y-3 p-5">
-                <div className="flex items-center justify-between gap-3">
-                  <span className="text-sm text-tinta-600">Concluídos</span>
-                  <Badge tom="verde">{formatarNumero(resumo.enriquecidos)}</Badge>
-                </div>
-                <div className="flex items-center justify-between gap-3">
-                  <span className="text-sm text-tinta-600">Aguardando cota</span>
-                  <Badge
-                    tom={resumo.pendentesEnriquecimento > 0 ? 'amarelo' : 'neutro'}
-                  >
-                    {formatarNumero(resumo.pendentesEnriquecimento)}
-                  </Badge>
-                </div>
-                <p className="border-t border-tinta-100 pt-3 text-xs leading-relaxed text-tinta-500">
-                  Leads marcados como <em>aguardando cota</em> voltam a ser
-                  enriquecidos assim que o limite mensal da Tavily renovar.
-                </p>
-              </div>
-            </Card>
-
-            <Card>
-              <CardCabecalho titulo="Ir direto para" />
-              <div className="divide-y divide-tinta-100">
-                {ATALHOS.map((atalho) => (
-                  <Link
-                    key={atalho.href}
-                    href={atalho.href}
-                    className="group flex items-start gap-3 px-5 py-3.5 transition-colors hover:bg-tinta-50"
-                  >
-                    <span className="mt-1.5 size-1.5 shrink-0 rounded-full bg-amarelo-400" />
-                    <span>
-                      <span className="block text-sm font-semibold text-tinta-900 group-hover:text-verde-700">
-                        {atalho.titulo}
-                      </span>
-                      <span className="mt-0.5 block text-xs leading-relaxed text-tinta-500">
-                        {atalho.texto}
-                      </span>
-                    </span>
-                  </Link>
-                ))}
-              </div>
-            </Card>
-          </div>
-        </div>
-
-        <Card className="mt-6">
-          <CardCabecalho
-            titulo="Antes do funil: sua prospecção"
-            descricao="Quanto cada etapa da automação entrega para a etapa seguinte."
-          />
-
-          {funilLeads.length === 0 || topoLeads === 0 ? (
-            <EstadoVazio
-              titulo="Sem movimento ainda"
-              descricao="Assim que você gerar a primeira lista, esta parte começa a se preencher."
-            />
           ) : (
-            <div className="divide-y divide-tinta-100">
-              {funilLeads.map((etapa, indice) => {
-                const percentualDoTopo =
-                  topoLeads > 0 ? (etapa.quantidade / topoLeads) * 100 : 0
-                const anterior = indice > 0 ? funilLeads[indice - 1] : null
-                const conversao =
-                  anterior && anterior.quantidade > 0
-                    ? (etapa.quantidade / anterior.quantidade) * 100
-                    : null
-
-                return (
-                  <div key={etapa.chave} className="px-5 py-4">
-                    <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
-                      <div className="min-w-0">
-                        <p className="text-sm font-semibold text-tinta-900">
-                          {etapa.rotulo}
-                        </p>
-                        <p className="mt-0.5 text-xs text-tinta-500">
-                          {etapa.descricao}
-                        </p>
-                      </div>
-                      <div className="flex items-baseline gap-3">
-                        {conversao != null && (
-                          <Badge tom={conversao >= 50 ? 'verde' : 'neutro'}>
-                            {formatarPercentual(conversao)} da etapa anterior
-                          </Badge>
-                        )}
-                        <span className="numerico font-titulo text-xl font-extrabold text-tinta-900">
-                          {formatarNumero(etapa.quantidade)}
-                        </span>
-                      </div>
-                    </div>
-                    <div className="mt-3">
-                      <Barra
-                        percentual={percentualDoTopo}
-                        tom={
-                          indice === 0
-                            ? 'verde'
-                            : percentualDoTopo < 20
-                              ? 'amarelo'
-                              : 'verde'
-                        }
-                      />
-                    </div>
-                  </div>
-                )
-              })}
-            </div>
+            <Tabela>
+              <thead>
+                <tr>
+                  <Th>Setor</Th>
+                  <Th>Cidade</Th>
+                  <Th className="text-right">Leads</Th>
+                  <Th>Criada</Th>
+                </tr>
+              </thead>
+              <tbody>
+                {resumo.ultimasListas.map((lista) => (
+                  <Tr key={lista.id}>
+                    <Td>
+                      <Link
+                        href={`/listas/${lista.id}`}
+                        className="font-semibold text-tinta-900 hover:text-verde-700 hover:underline"
+                      >
+                        {lista.setor || 'Sem setor'}
+                      </Link>
+                    </Td>
+                    <Td className="text-tinta-600">{lista.cidade || '—'}</Td>
+                    <Td className="numerico text-right font-semibold">
+                      {formatarNumero(lista.quantidadeLeads)}
+                    </Td>
+                    <Td className="text-tinta-500">
+                      {tempoRelativo(lista.criadaEm)}
+                    </Td>
+                  </Tr>
+                ))}
+              </tbody>
+            </Tabela>
           )}
         </Card>
       </section>
