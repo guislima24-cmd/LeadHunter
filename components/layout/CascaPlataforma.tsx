@@ -45,7 +45,11 @@ export function CascaPlataforma({
           recolhida ? 'lg:pl-16' : 'lg:pl-64',
         )}
       >
-        <main className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8 lg:py-10">
+        {/* Sem teto de largura: o quadro de negócios ganha uma coluna a mais
+            de funil a cada ~290 px, então travar o conteúdo numa faixa central
+            custava rolagem horizontal em tela que tinha espaço de sobra. O
+            respiro vem do padding, que cresce junto com a tela. */}
+        <main className="w-full px-4 py-6 sm:px-6 lg:px-8 lg:py-10 2xl:px-12">
           {children}
         </main>
       </div>

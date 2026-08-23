@@ -179,10 +179,12 @@ export function QuadroNegocios({
         </div>
       )}
 
-      {/* Rolagem horizontal fica no container do quadro: a página em si nunca
-          rola de lado, mesmo com muitas etapas configuradas. */}
+      {/* As colunas dividem a largura disponível em partes iguais e só passam
+          a rolar quando nem no mínimo de 15rem elas cabem — numa tela larga o
+          funil inteiro aparece de uma vez. A rolagem, quando sobra, fica neste
+          container: a página em si nunca rola de lado. */}
       <div className="rolagem-fina -mx-4 overflow-x-auto px-4 pb-2 sm:mx-0 sm:px-0">
-        <div className="flex min-w-max gap-3">
+        <div className="flex gap-3">
           {visiveis.map((coluna) => {
             const alvo = colunaAlvo === coluna.etapa.id && arrastando !== null
             return (
@@ -211,7 +213,7 @@ export function QuadroNegocios({
                   if (negocio) void moverPara(negocio, coluna.etapa.id)
                 }}
                 className={cn(
-                  'flex w-[17.5rem] shrink-0 flex-col rounded-cartao border bg-tinta-50/70 transition-colors',
+                  'flex min-w-60 flex-1 flex-col rounded-cartao border bg-tinta-50/70 transition-colors',
                   alvo
                     ? 'border-verde-400 bg-verde-50/70'
                     : 'border-tinta-200',
