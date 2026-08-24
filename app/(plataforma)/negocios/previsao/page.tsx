@@ -10,7 +10,7 @@ import { exigirMembro } from '@/lib/sessao'
 import { listarOrganizacoes, listarProdutosServicos } from '@/lib/crm'
 import {
   obterPrevisaoMensal,
-  listarNegociosDoMes,
+  agruparNegociosPorMesDePrevisao,
   contarReagendadosPendentes,
 } from '@/lib/negocios'
 import {
@@ -32,16 +32,14 @@ export const metadata = { title: 'Negócios · Previsão' }
 export default async function PaginaPrevisao() {
   await exigirMembro()
 
-  const [previsao, organizacoes, produtos, reagendados] = await Promise.all([
-    obterPrevisaoMensal(),
-    listarOrganizacoes(),
-    listarProdutosServicos(),
-    contarReagendadosPendentes(),
-  ])
-
-  const negociosPorMes = await Promise.all(
-    previsao.meses.map((m) => listarNegociosDoMes(m.mes)),
-  )
+  const [previsao, negociosPorMes, organizacoes, produtos, reagendados] =
+    await Promise.all([
+      obterPrevisaoMensal(),
+      agruparNegociosPorMesDePrevisao(),
+      listarOrganizacoes(),
+      listarProdutosServicos(),
+      contarReagendadosPendentes(),
+    ])
 
   const totalPrevisto = previsao.meses.reduce((s, m) => s + m.valorTotal, 0)
   const totalNegocios = previsao.meses.reduce((s, m) => s + m.quantidade, 0)
@@ -101,8 +99,8 @@ export default async function PaginaPrevisao() {
             />
           </Card>
         ) : (
-          previsao.meses.map((mes, i) => {
-            const negocios = negociosPorMes[i]
+          previsao.meses.map((mes) => {
+            const negocios = negociosPorMes.get(mes.mes) ?? []
             const ehMesCorrente = mes.mes.slice(0, 7) === hoje
             const ehPassado = mes.mes.slice(0, 7) < hoje
 

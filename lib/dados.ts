@@ -71,7 +71,12 @@ export async function obterResumoInicio(membro: string | null): Promise<ResumoIn
 
   const [leadsNaBase, listasDoMembro, emails, reservas, enriquecidos, pendentes, ultimas] =
     await Promise.all([
-      contar('leads'),
+      // Estimativa do planejador, não `count(*)`: a contagem exata nesta
+      // tabela de 1,67 milhão de linhas custava de 149 ms a 2,8 s conforme o
+      // cache do Postgres, e era o maior custo isolado de abrir o Início.
+      // O número só muda quando a base da Receita Federal é recarregada — a
+      // precisão do último dígito não vale segundos de espera.
+      db.rpc('contar_leads_estimado'),
       membro
         ? contar('listas_geradas').eq('membro', membro)
         : Promise.resolve({ count: 0 }),
@@ -98,7 +103,7 @@ export async function obterResumoInicio(membro: string | null): Promise<ResumoIn
   )
 
   return {
-    leadsNaBase: leadsNaBase.count ?? 0,
+    leadsNaBase: Number(leadsNaBase.data ?? 0),
     minhasListas: listasDoMembro.count ?? 0,
     leadsNasListas: listas.reduce((soma, l) => soma + l.quantidadeLeads, 0),
     emailsEnviados: emails.count ?? 0,

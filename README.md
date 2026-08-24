@@ -57,6 +57,28 @@ merecem atenção:
   RLS e só pode existir no servidor.
 - `N8N_WEBHOOK_BASE` — base dos webhooks, sem barra no final.
 
+## Desempenho
+
+Quatro coisas dominavam o tempo de resposta, e todas foram medidas antes de mexer:
+
+**A aplicação rodava longe do banco.** Supabase em `sa-east-1` (São Paulo), funções da Vercel no padrão `iad1` (Washington) — ~120 ms de ida e volta em *toda* consulta. `vercel.json` fixa `regions: ["gru1"]` (São Paulo): banco, servidor e usuários no mesmo continente. Mexer nisso é uma linha e vale mais que qualquer otimização de consulta.
+
+**A sessão era validada três vezes por navegação.** O `proxy.ts` valida (e precisa: é ele que renova o cookie), o layout da plataforma chama `exigirMembro()` e cada página chama de novo. Como `auth.getUser()` é chamada de rede, eram três idas e voltas antes de a página buscar o próprio dado. `obterMembro` agora é `cache()` do React, o que funde as duas do lado do React numa só — por requisição, nunca entre usuários.
+
+**`count(*)` numa tabela de 1,67 milhão de linhas.** O card "leads na base" do Início custava 149 ms com as páginas quentes no cache e **2.776 ms** com elas frias — 20x mais que qualquer outra consulta da aplicação. Virou `contar_leads_estimado()`, que lê `pg_class.reltuples` (a mesma estimativa que o planejador usa) em **1,2 ms**. Na aferição, estimativa e contagem real batiam no dígito. O número só muda quando a base da Receita Federal é recarregada.
+
+**A Previsão fazia uma consulta por mês.** Agora é uma só, agrupada em memória.
+
+O resto do banco está saudável: nenhuma outra consulta da plataforma passa de 6 ms.
+
+### Por que a tela parecia não responder ao clique
+
+Sintoma relatado: "tenho que dar dois cliques para abrir qualquer coisa". Não era clique perdido — era ausência de resposta visual.
+
+No App Router, navegar para uma página dinâmica não muda nada na tela até o servidor responder: a página antiga fica congelada, sem spinner nem barra de progresso. Para quem clicou, é indistinguível de um clique que não pegou.
+
+Cada rota da plataforma tem agora um `loading.tsx` com um esqueleto no formato da página que vem depois. Isso resolve dois problemas de uma vez: a troca acontece no mesmo quadro do clique, e o `<Link>` do Next passa a conseguir pré-carregar a rota — sem uma fronteira de `loading`, rota dinâmica não é pré-carregada de jeito nenhum.
+
 ## Decisões de arquitetura
 
 **Os webhooks do n8n são sempre chamados pelo servidor.** A URL da instância não

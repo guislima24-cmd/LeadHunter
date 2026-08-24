@@ -322,25 +322,38 @@ export async function obterPrevisaoMensal(): Promise<{
   }
 }
 
-/** Os negócios de um mês da previsão, para a tela poder abrir a faixa. */
-export async function listarNegociosDoMes(
-  mes: string,
-): Promise<NegocioNaLista[]> {
+/**
+ * Todos os negócios com previsão, já agrupados pelo mês de competência.
+ *
+ * Uma consulta só, não uma por mês. A tela lista os negócios dentro de cada
+ * faixa da previsão; buscar mês a mês fazia uma ida ao banco por competência
+ * — doze meses à frente eram doze consultas, cada uma pagando a latência de
+ * rede inteira, para trazer no total as mesmas poucas centenas de linhas que
+ * cabem numa.
+ */
+export async function agruparNegociosPorMesDePrevisao(): Promise<
+  Map<string, NegocioNaLista[]>
+> {
   const admin = criarClienteAdmin()
-
-  const inicio = new Date(`${mes}T00:00:00Z`)
-  const fim = new Date(inicio)
-  fim.setUTCMonth(fim.getUTCMonth() + 1)
 
   const { data } = await admin
     .from('vw_quadro_negocios')
     .select('*')
     .eq('status', 'aberto')
-    .gte('previsao_fechamento', inicio.toISOString().slice(0, 10))
-    .lt('previsao_fechamento', fim.toISOString().slice(0, 10))
+    .not('previsao_fechamento', 'is', null)
     .order('previsao_fechamento', { ascending: true })
 
-  return (data ?? []).map((n) => paraNegocioNaLista(n))
+  const porMes = new Map<string, NegocioNaLista[]>()
+  for (const linha of data ?? []) {
+    // A chave é o primeiro dia do mês, no mesmo formato que
+    // `vw_negocios_previsao_mensal.mes` devolve.
+    const chave = `${(linha.previsao_fechamento as string).slice(0, 7)}-01`
+    const lista = porMes.get(chave) ?? []
+    lista.push(paraNegocioNaLista(linha))
+    porMes.set(chave, lista)
+  }
+
+  return porMes
 }
 
 // ---------------------------------------------------------------------------

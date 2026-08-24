@@ -1,4 +1,5 @@
 import 'server-only'
+import { cache } from 'react'
 import { redirect } from 'next/navigation'
 import { criarClienteServidor } from '@/lib/supabase/servidor'
 import { criarClienteAdmin } from '@/lib/supabase/admin'
@@ -25,11 +26,19 @@ export interface Membro {
 /**
  * Lê a sessão e devolve o perfil do membro, criando-o no primeiro login.
  *
+ * Embrulhada em `cache()` do React porque o layout da plataforma **e** cada
+ * página chamam `exigirMembro()` na mesma renderização. Sem a deduplicação
+ * isso custava duas validações de token no servidor de Auth do Supabase mais
+ * duas leituras de `member_profiles` — e como o Auth fica em São Paulo e a
+ * validação é uma chamada de rede, era ida e volta dobrada antes de a página
+ * começar a buscar o próprio dado. `cache()` vale por requisição: usuários
+ * diferentes nunca compartilham resultado.
+ *
  * Quem tem email do domínio sempre entra; o vínculo com a aba da planilha
  * pode ficar pendente (`abaPlanilha: null`) até um admin preencher. As telas
  * que disparam workflows checam isso e explicam o que fazer.
  */
-export async function obterMembro(): Promise<Membro | null> {
+export const obterMembro = cache(async function obterMembro(): Promise<Membro | null> {
   const supabase = await criarClienteServidor()
   const {
     data: { user },
@@ -91,7 +100,7 @@ export async function obterMembro(): Promise<Membro | null> {
     avatarUrl,
     emailRemetente: perfil.email_remetente ?? null,
   }
-}
+})
 
 /** Para Server Components: garante sessão válida ou manda para o login. */
 export async function exigirMembro(): Promise<Membro> {
