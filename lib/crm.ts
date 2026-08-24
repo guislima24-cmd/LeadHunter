@@ -41,6 +41,28 @@ const MENSAGENS_ERRO_RPC: Record<string, { mensagem: string; status: number }> =
   },
   titulo_obrigatorio: { mensagem: 'Informe o título do negócio.', status: 400 },
   cnpj_invalido: { mensagem: 'CNPJ precisa ter 14 dígitos.', status: 400 },
+  reagendamento_obrigatorio: {
+    mensagem:
+      'Esse motivo pede o plano de retomada: preencha o que aconteceu, o que fazer ao voltar e a data do recontato.',
+    status: 400,
+  },
+  data_recontato_no_passado: {
+    mensagem: 'A data do recontato precisa ser no futuro.',
+    status: 400,
+  },
+  reagendamento_nao_encontrado_ou_ja_tratado: {
+    mensagem: 'Essa retomada não existe mais ou já foi marcada como recontatada.',
+    status: 409,
+  },
+  relatorio_nao_encontrado_ou_ja_publicado: {
+    mensagem: 'Esse relatório não existe ou já foi publicado.',
+    status: 409,
+  },
+  ja_existe_relatorio_publicado_no_periodo: {
+    mensagem:
+      'Já existe um relatório publicado para esse mês. Despublique o outro antes, ou edite aquele.',
+    status: 409,
+  },
 }
 
 export interface RespostaRpc<T> {
@@ -413,16 +435,28 @@ export async function obterNegociosPorCnpj(
 export interface MotivoPerda {
   id: string
   nome: string
+  /**
+   * Escolher este motivo obriga o plano de retomada no mesmo fechamento.
+   *
+   * Vem do banco, não de comparar o nome com `'Momento errado'`: o rótulo é
+   * editável na configuração, e um `if` por texto quebraria em silêncio no
+   * dia em que alguém o reescrevesse.
+   */
+  exigeReagendamento: boolean
 }
 
 export async function listarMotivosPerda(): Promise<MotivoPerda[]> {
   const admin = criarClienteAdmin()
   const { data } = await admin
     .from('motivos_perda')
-    .select('id, nome')
+    .select('id, nome, exige_reagendamento')
     .eq('ativo', true)
     .order('ordem', { ascending: true })
-  return data ?? []
+  return (data ?? []).map((m) => ({
+    id: m.id as string,
+    nome: m.nome as string,
+    exigeReagendamento: Boolean(m.exige_reagendamento),
+  }))
 }
 
 export interface ProdutoServico {

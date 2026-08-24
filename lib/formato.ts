@@ -80,6 +80,26 @@ export function formatarData(iso: string | null | undefined): string {
   }).format(d)
 }
 
+/**
+ * "Março de 2026" — para agrupamentos por competência.
+ *
+ * Lê a data como UTC de propósito. `2026-03-01` vindo do Postgres vira, no
+ * fuso de Brasília, 28/02 às 21h — e o mês inteiro apareceria rotulado como
+ * fevereiro. Datas de competência não têm hora; tratá-las como instante é
+ * que introduz o erro.
+ */
+export function formatarMesAno(iso: string | null | undefined): string {
+  if (!iso) return '—'
+  const d = new Date(iso.length <= 10 ? `${iso}T12:00:00Z` : iso)
+  if (Number.isNaN(d.getTime())) return '—'
+  const texto = new Intl.DateTimeFormat('pt-BR', {
+    month: 'long',
+    year: 'numeric',
+    timeZone: 'UTC',
+  }).format(d)
+  return texto.charAt(0).toUpperCase() + texto.slice(1)
+}
+
 /** "há 3 dias", "há 2 h" — para listas de atividade recente. */
 export function tempoRelativo(iso: string | null | undefined): string {
   if (!iso) return '—'

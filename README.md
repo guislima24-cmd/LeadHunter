@@ -22,12 +22,21 @@ workflows com a identidade certa e mostra o resultado.
 
 | Rota | O que faz | Workflow |
 |---|---|---|
-| `/` | Quadro de negócios (kanban) do time e, abaixo, o panorama da operação: leads na base, listas, emails, reservas, enriquecimento e funil de prospecção | — |
+| `/` | Panorama da operação: números do funil, gráficos e o volume bruto da prospecção (leads na base, listas, emails, reservas) | — |
+| `/negocios` | **Kanban** — o funil do time, a visualização padrão da aba | — |
+| `/negocios/lista` | **Lista** — tabela paginada e filtrável, a única que mostra também os fechados | — |
+| `/negocios/funil` | **Funil** — o funil em formato de funil, largura proporcional por etapa | — |
+| `/negocios/previsao` | **Previsão** — abertos agrupados pelo mês da previsão de fechamento | — |
+| `/negocios/reagendados` | **Reagendados** — perdidos por "momento errado", com briefing e data de retomada | — |
 | `/negocios/[id]` | Ficha do negócio: etapa, campos editáveis, empresa, contatos e linha do tempo (atividades + passagens de etapa) | — |
 | `/buscar` | Filtra a base da Receita Federal, pré-visualiza e gera lista com dedupe + reserva de 24 h | W1 → W2 |
-| `/listas` · `/listas/[id]` | Listas geradas, enriquecimento por lead e disparo da prospecção por email | W2, W3 |
+| `/listas` · `/listas/[id]` | Listas geradas, enriquecimento por lead, disparo da prospecção e registro de aceite/resposta | W2, W3 |
 | `/maps` | Prospecção de negócios locais por setor e cidade, com análise da IA | W5 |
-| `/pipeline` | Redireciona para `/` — o quadro deixou de ter aba própria | — |
+| `/insights` | Painel: funil de prospecção, conversão, ganhos × perdidos, ranking e metas, com filtro de período | — |
+| `/insights/metas` | Metas e OKRs — leitura para todos, escrita **só administradores** | — |
+| `/insights/relatorios` · `/insights/relatorios/[id]` | Relatórios mensais, com os números do mês congelados junto | — |
+| `/insights/relatorios/gerar` | Gera o relatório do mês com IA (nasce rascunho) ou à mão | — |
+| `/pipeline` | Redireciona para `/negocios` — o quadro deixou de ter aba própria | — |
 | `/precificacao` | Orçamentos abertos e o resumo da régua de preço | — |
 | `/precificacao/[id]` | Calculadora do orçamento: serviços, esforço, complexidade do escopo e os três níveis de preço | — |
 | `/precificacao/referencia` | A régua editável — taxa/hora por porte, pontos de complexidade, capacidade e impostos — **só administradores** | — |
@@ -110,6 +119,11 @@ lib/
   dados.ts           leituras da plataforma
   precificacao.ts    a fórmula do orçamento (mesma no cliente e no servidor)
   orcamentos.ts      leituras do módulo de precificação
+  negocios.ts        Lista, Funil, Previsão e Reagendados
+  insights.ts        painel, metas e relatórios (server-only)
+  tipos-insights.ts  os tipos e rótulos de Insights que o navegador também usa
+  relatorio-ia.ts    redação do relatório mensal pela API da Anthropic
+  cores-grafico.ts   a paleta validada dos gráficos
 n8n/                 documentação e SQL das automações
 proxy.ts             sessão + bloqueio de acesso anônimo
 ```

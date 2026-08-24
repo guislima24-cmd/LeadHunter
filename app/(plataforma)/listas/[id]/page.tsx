@@ -10,9 +10,11 @@ import { BotaoProspectar } from './BotaoProspectar'
 import { PreviaEmail } from './PreviaEmail'
 import { PainelEnriquecimento } from './PainelEnriquecimento'
 import { PromoverLead } from './PromoverLead'
+import { EventosDoLead } from './EventosDoLead'
 import { exigirMembro } from '@/lib/sessao'
 import { obterLista, type LeadDaLista } from '@/lib/dados'
 import { obterNegociosPorCnpj } from '@/lib/crm'
+import { obterEventosDeProspeccao } from '@/lib/insights'
 import {
   formatarCNPJ,
   formatarTelefone,
@@ -54,7 +56,11 @@ export default async function PaginaLista({
   if (!dados) notFound()
 
   const { lista, leads } = dados
-  const negociosPorCnpj = await obterNegociosPorCnpj(leads.map((l) => l.cnpj))
+  const cnpjs = leads.map((l) => l.cnpj)
+  const [negociosPorCnpj, eventosPorCnpj] = await Promise.all([
+    obterNegociosPorCnpj(cnpjs),
+    obterEventosDeProspeccao(cnpjs),
+  ])
   const enriquecidos = leads.filter((l) => l.enriquecimentoStatus === 'ok').length
   const contatados = leads.filter((l) => l.contatadoEm).length
   const elegiveis = leads.filter((l) => l.email && !l.contatadoEm).length
@@ -131,6 +137,7 @@ export default async function PaginaLista({
                 <Th>Contato</Th>
                 <Th>Enriquecimento</Th>
                 <Th>Prospecção</Th>
+                <Th>Retorno</Th>
                 <Th>Negócio</Th>
                 <Th className="text-right">Email</Th>
               </tr>
@@ -214,6 +221,13 @@ export default async function PaginaLista({
                     ) : (
                       <span className="text-tinta-400">Sem email</span>
                     )}
+                  </Td>
+                  <Td>
+                    <EventosDoLead
+                      cnpj={lead.cnpj}
+                      aceite={eventosPorCnpj.get(lead.cnpj)?.aceite ?? false}
+                      resposta={eventosPorCnpj.get(lead.cnpj)?.resposta ?? false}
+                    />
                   </Td>
                   <Td>
                     <PromoverLead

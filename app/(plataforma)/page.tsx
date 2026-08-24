@@ -4,43 +4,37 @@ import { Card, CardCabecalho } from '@/components/ui/Card'
 import { Metrica } from '@/components/ui/Metrica'
 import { EstadoVazio } from '@/components/ui/Estado'
 import { Tabela, Th, Td, Tr } from '@/components/ui/Tabela'
-import { QuadroNegocios } from '@/components/crm/QuadroNegocios'
-import { NovoNegocio } from '@/components/crm/NovoNegocio'
 import { PainelGraficos } from '@/components/crm/PainelGraficos'
 import { exigirMembro } from '@/lib/sessao'
 import { obterResumoInicio, obterFunilDoMembro } from '@/lib/dados'
-import {
-  obterQuadroDeNegocios,
-  obterPainelDoFunil,
-  listarMotivosPerda,
-  listarOrganizacoes,
-  listarProdutosServicos,
-} from '@/lib/crm'
+import { obterQuadroDeNegocios, obterPainelDoFunil } from '@/lib/crm'
+import { contarReagendadosPendentes } from '@/lib/negocios'
 import { formatarNumero, formatarReais, tempoRelativo } from '@/lib/formato'
 
 export const metadata = { title: 'Início' }
 
 /**
- * Início da plataforma: o quadro de negócios primeiro, os gráficos do funil
- * logo abaixo e o volume bruto da prospecção por último.
+ * Início: o panorama da operação inteira, do lead bruto ao contrato.
  *
- * O funil é o que responde "como estamos agora"; leads, listas e
- * enriquecimento são o que o alimenta. `/pipeline` continua existindo, mas só
- * redireciona para cá — o quadro não tem mais aba própria.
+ * O quadro de negócios morava aqui e mudou para a aba Negócios nesta rodada.
+ * O motivo é que o funil ganhou quatro formas de ser olhado (Kanban, Lista,
+ * Funil, Previsão) — empilhar as quatro sob o resumo da prospecção faria as
+ * três últimas nascerem abaixo da dobra, que é exatamente o problema que
+ * tirar o Kanban de `/pipeline` tinha resolvido.
+ *
+ * O que fica: os números de saída do funil no topo (é o que se quer ver ao
+ * abrir o CRM), os gráficos, e o volume bruto que alimenta tudo.
  */
 export default async function PaginaInicio() {
   const membro = await exigirMembro()
 
-  const [resumo, quadro, painel, motivosPerda, organizacoes, produtos, funilLeads] =
-    await Promise.all([
-      obterResumoInicio(membro.abaPlanilha),
-      obterQuadroDeNegocios(),
-      obterPainelDoFunil(),
-      listarMotivosPerda(),
-      listarOrganizacoes(),
-      listarProdutosServicos(),
-      obterFunilDoMembro(membro.abaPlanilha),
-    ])
+  const [resumo, quadro, painel, funilLeads, reagendados] = await Promise.all([
+    obterResumoInicio(membro.abaPlanilha),
+    obterQuadroDeNegocios(),
+    obterPainelDoFunil(),
+    obterFunilDoMembro(membro.abaPlanilha),
+    contarReagendadosPendentes(),
+  ])
 
   const primeiroNome = membro.nome.split(' ')[0] || membro.nome
   const houveNegocio = painel.etapasAlcancadas.some((e) => e.quantidade > 0)
@@ -49,7 +43,15 @@ export default async function PaginaInicio() {
     <>
       <Cabecalho
         titulo={`Olá, ${primeiroNome}`}
-        descricao="O funil do time, em primeiro plano. Cada cartão é uma oportunidade real sendo trabalhada."
+        descricao="Como está a operação comercial agora — do lead na base ao contrato assinado."
+        acao={
+          <Link
+            href="/negocios"
+            className="inline-flex h-9 items-center rounded-lg bg-verde-600 px-4 text-sm font-semibold text-white transition-colors hover:bg-verde-700"
+          >
+            Abrir o funil
+          </Link>
+        }
       />
 
       <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
@@ -85,48 +87,26 @@ export default async function PaginaInicio() {
         />
       </section>
 
-      <div className="mt-6">
-        {quadro.totalAbertos === 0 ? (
-          <Card>
-            <CardCabecalho
-              titulo="Funil de negócios"
-              descricao="Cada cartão é uma oportunidade real sendo trabalhada."
-              acao={
-                <NovoNegocio organizacoes={organizacoes} produtos={produtos} />
-              }
-            />
-            <EstadoVazio
-              titulo="Nenhum negócio no funil ainda"
-              descricao="Um negócio nasce quando alguém decide trabalhar uma oportunidade de verdade — nenhuma automação cria isso sozinha. Crie um à mão, ou abra uma das suas listas e use “Iniciar negócio” em um lead já enriquecido."
-              acao={
-                <div className="flex flex-wrap items-center justify-center gap-2">
-                  <NovoNegocio
-                    organizacoes={organizacoes}
-                    produtos={produtos}
-                  />
-                  <Link
-                    href="/listas"
-                    className="inline-flex h-8 items-center rounded-md border border-tinta-200 bg-white px-3 text-xs font-semibold text-tinta-800 transition-colors hover:bg-tinta-50"
-                  >
-                    Ir para minhas listas
-                  </Link>
-                </div>
-              }
-            />
-          </Card>
-        ) : (
-          <QuadroNegocios
-            colunas={quadro.colunas}
-            motivosPerda={motivosPerda}
-            emailDoMembro={membro.email}
-            organizacoes={organizacoes}
-            produtos={produtos}
-          />
-        )}
-      </div>
+      {/* Uma fila que se espera zerar não merece um card fixo — só aparece
+          quando tem alguém dentro dela. */}
+      {reagendados > 0 && (
+        <Link
+          href="/negocios/reagendados"
+          className="mt-4 flex items-center justify-between gap-3 rounded-cartao border border-amarelo-300 bg-amarelo-50 px-4 py-3 transition-colors hover:bg-amarelo-100"
+        >
+          <span className="text-sm text-amarelo-800">
+            <strong className="numerico">{formatarNumero(reagendados)}</strong>{' '}
+            {reagendados === 1
+              ? 'negócio perdido por timing aguarda recontato'
+              : 'negócios perdidos por timing aguardam recontato'}
+            .
+          </span>
+          <span className="shrink-0 text-xs font-semibold text-amarelo-800 underline">
+            Ver a fila
+          </span>
+        </Link>
+      )}
 
-      {/* O painel aparece assim que existe histórico, mesmo sem negócio aberto
-          — mês fechado inteiro em ganho/perdido ainda é o que se quer ver. */}
       {houveNegocio && (
         <section className="mt-10">
           <div className="mb-4 border-b border-tinta-200 pb-3">

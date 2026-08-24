@@ -90,7 +90,7 @@ export default async function PaginaNegocio({
     <>
       <div className="mb-4">
         <Link
-          href="/"
+          href="/negocios"
           className="inline-flex items-center gap-1.5 text-xs font-semibold text-tinta-500 transition-colors hover:text-verde-700"
         >
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="size-3.5">

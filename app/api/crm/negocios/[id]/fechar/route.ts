@@ -23,11 +23,18 @@ export async function PATCH(
     )
   }
 
+  // Os três campos do plano de retomada seguem sempre, mesmo vazios: quem
+  // decide se eles são obrigatórios é a função no banco, olhando o motivo
+  // escolhido (`motivos_perda.exige_reagendamento`). Replicar essa checagem
+  // aqui só criaria uma segunda regra para discordar da primeira.
   const resultado = await chamarRpcCrm<null>('crm_fechar_negocio', {
     p_negocio_id: id,
     p_status: status,
     p_membro_email: sessao.membro.email,
     p_motivo_perda_id: corpo.motivoPerdaId ?? null,
+    p_motivo_detalhado: corpo.motivoDetalhado ?? null,
+    p_contexto_para_retomada: corpo.contextoParaRetomada ?? null,
+    p_data_recontato: corpo.dataRecontato || null,
   })
 
   if (!resultado.ok) {

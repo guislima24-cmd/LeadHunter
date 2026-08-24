@@ -323,6 +323,64 @@ A ordem importa: custo fixo entra depois da complexidade e da capacidade, senão
 
 Finalizar um orçamento grava `negocios.valor` e aponta `produto_servico_id` para o item de maior valor. Orçamento finalizado não recalcula: ele guardou o próprio cálculo, então mexer na régua depois muda os orçamentos novos e deixa o histórico intacto. Apagar só é possível enquanto for rascunho.
 
+## Navegação, Negócios e Insights
+
+Implementação de `leadhunter-crm-navegacao-insights-prd.md`. Schema em `sql/011_crm_reagendamento_previsao.sql` e `sql/012_crm_insights.sql`, aplicados em 24/08/2026 no projeto `dulpeemmwhudcjqwbolr`.
+
+### O motivo de perda virou uma coluna, não um `if` por nome
+
+O PRD pede uma entrada nova em `motivos_perda` chamada "Momento errado", que ao ser escolhida obriga o preenchimento de um plano de retomada. Duas decisões mudaram como isso foi feito:
+
+1. **Já existia "Timing ruim"** (ordem 5) — o mesmo motivo com outro nome. Criar a nova ao lado deixaria dois sinônimos na mesma lista e racharia o histórico entre eles. Foi renomeado no lugar, preservando o uuid e portanto os negócios que já apontavam para ele.
+2. **A ligação com o formulário é `motivos_perda.exige_reagendamento`**, não o texto do nome. Casar por string (`if motivo = 'Momento errado'`) quebraria em silêncio no dia em que alguém reescrevesse o rótulo na tela de configuração — e o rótulo existe justamente para ser editável.
+
+A obrigatoriedade mora em `crm_fechar_negocio`, não na rota HTTP: a função é chamada do quadro e da ficha, e um dia pode ser chamada de um workflow. Exigir na função é exigir em todas as portas. Os parâmetros novos têm default `null` para não quebrar chamadas existentes, mas fechar sem eles com um motivo que os exige levanta `reagendamento_obrigatorio` e a transação inteira volta atrás.
+
+**Atenção ao recriar a função:** em Postgres a assinatura faz parte da identidade, então `create or replace` com parâmetros novos cria uma *segunda* função em vez de substituir a primeira. A migração faz `drop function ... (uuid, text, text, uuid)` antes — sem isso, uma chamada com quatro argumentos (como a rota de fechar fazia até agora) casaria com a versão antiga, que não sabe nada de reagendamento, e a regra nova passaria despercebida exatamente no caminho que ela precisa cobrir.
+
+### O alerta de retomada vai para todos os admins
+
+`GET /api/cron/reagendamentos-proximos` (agendado no `vercel.json`, diário às 11h UTC) notifica retomadas que vencem em até 5 dias. Vai para **todos os administradores ativos**, não para quem registrou a perda: o ponto do reagendamento é que a retomada não dependa da memória — nem da presença — de uma pessoa só, e quem perdeu o negócio pode ter saído da EJ entre a perda e a data de voltar.
+
+`negocio_reagendamentos.notificado_em` marca o que já foi avisado. A coluna existe em vez de a rota conferir `notificacoes` porque a notificação é por admin e o aviso é por retomada — contar linhas de uma para decidir a outra erraria assim que o time mudasse de tamanho. A marcação acontece **depois** da inserção: se viesse antes e a inserção falhasse, a retomada ficaria marcada como avisada sem ninguém ter sido avisado, e nunca mais entraria na consulta.
+
+Sem admin ativo, a rota não marca nada e devolve um aviso — assim o alerta sai de verdade assim que existir um, em vez de a retomada ser silenciosamente dada como avisada.
+
+### Os dois funis são separados, e os números não fecham entre si
+
+O funil de prospecção (Prospecção → Aceite → Resposta → Reuniões → RD → RP → Contratos) é métrica de topo de funil, **separada** de `etapas_funil`/`negocios`. Prospecção, aceite e resposta acontecem enquanto o lead ainda é lead, antes de existir negócio algum.
+
+Isso significa que "Reuniões" no funil de prospecção conta reuniões realizadas no período, enquanto o funil de negócios conta negócios parados na etapa Reunião agora. São perguntas diferentes e os totais não batem — de propósito. O PRD registra a sobreposição como ponto a revalidar com uso real (Bloqueador 1); até lá a tela diz de onde cada número sai, e marca com um selo os que dependem de registro manual.
+
+**Aceite e Resposta são manuais** (`funil_prospeccao_eventos`, botões na tela do lead) porque nenhum workflow lê a caixa de entrada institucional: o W3 grava que o email saiu e o que veio depois só quem conversou sabe. A tabela nasce preparada para o dia em que a automação existir — `registrado_por_email` nulo passa a significar "detectado automaticamente". Índice único por `(lead_cnpj, tipo_evento)`: dois cliques no botão não inflam a taxa de aceite do mês.
+
+RD e RP entraram como **tipos de atividade**, não etapas do funil de negócios — mexer em `etapas_funil` obrigaria a remapear todo negócio em andamento, e o PRD prefere adiar essa decisão até ver os dois funis lado a lado com dado real.
+
+### Metas: o progresso é calculado na leitura, não gravado por job
+
+`metas.valor_atual` só é lido quando `metrica_fonte = 'manual'`. Para as outras cinco fontes o número é **calculado toda vez que a tela abre**, a partir da fonte real.
+
+O PRD previa um job periódico atualizando a coluna. Um valor gravado por job fica errado entre uma execução e a seguinte, e uma meta que mostra progresso velho é pior que uma que não mostra nada — ninguém desconfia de um número que está ali. O custo de calcular é um `count`/`sum` sobre índice existente; não vale um cron para isso, e ainda economiza um dos dois slots de cron que o plano Hobby do Vercel permite.
+
+A tela mostra, junto da barra, **onde a meta deveria estar pelo tempo decorrido do período**. A barra sozinha mente por omissão: 60% do alvo é ótimo no dia 10 e ruim no dia 28.
+
+### Relatórios: a IA redige, não calcula
+
+`POST /api/crm/insights/relatorios/gerar-ia` monta o snapshot a partir do banco, manda **só o snapshot** para a IA (`claude-opus-5`, via `@anthropic-ai/sdk`) e grava o texto. A IA não tem acesso ao banco, não recebe ferramentas e não vê id de entidade nenhuma — recebe os números já apurados, formatados em português, e escreve prosa sobre eles.
+
+O rascunho **nunca publica sozinho** (`gerado_por_ia = true`, `status = 'rascunho'`). A tela do relatório mostra o snapshot ao lado do texto justamente para que quem revisa possa bater cada afirmação contra o número que a originou.
+
+`metricas_snapshot` congela os números usados. Sem ele, reabrir um relatório de três meses atrás recalcularia tudo com o dado de hoje e o texto passaria a contradizer os próprios números — um negócio reclassificado depois mudaria a história de um mês já fechado. Mesmo trade-off do módulo de precificação.
+
+Um índice parcial garante **um publicado por mês** (`idx_relatorios_publicado_unico`); rascunhos convivem à vontade. Editar o texto continua livre depois de publicado — um relatório é documento vivo do time, e travar a correção de um erro de digitação em nome da imutabilidade seria formalidade sem serventia. O que não muda é o snapshot.
+
+`ANTHROPIC_API_KEY` está documentada em `.env.example` mas **não estava configurada** quando o módulo foi entregue. Sem ela a rota devolve 503 com uma mensagem explicando; o resto da tela (escrever à mão, editar, publicar) funciona igual.
+
+### Decisões deixadas em aberto pelo PRD
+
+- **Quem publica relatório** (Bloqueador 3): qualquer membro. É a opção menos restritiva porque o relatório já nasce revisado por gente e a EJ é pequena — restringir depois é uma linha, liberar depois exige convencer alguém.
+- **RD/RP** (Premissa da Seção 8): assumidos como "Reunião Diagnóstica" e "Reunião de Proposta". São os nomes padrão em consultoria, mas o PRD pede confirmação — se estiverem errados, é um `update` em `tipos_atividade.nome`.
+
 ### O que ficou de fora desta rodada
 
 - **UI/telas** — fora de escopo por decisão explícita da especificação (Seção 7 dela: "Telas, layout e componentes de UI ficam para uma etapa posterior").

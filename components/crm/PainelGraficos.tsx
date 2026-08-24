@@ -13,6 +13,7 @@ import {
   YAxis,
 } from 'recharts'
 import { Card, CardCabecalho } from '@/components/ui/Card'
+import { COR, EIXO } from '@/lib/cores-grafico'
 import {
   formatarNumero,
   formatarPercentual,
@@ -25,28 +26,9 @@ import type { EtapaFunil as EtapaFunilLeads } from '@/lib/dados'
 /**
  * Gráficos do funil.
  *
- * As cores não são as da interface. O verde da marca (#00634a) tem croma baixo
- * demais para preencher área — num gráfico ele lê como cinza — e verde contra
- * vermelho é justamente o par que protanopia não separa. Então as séries usam
- * tons vizinhos da mesma família, escolhidos rodando o validador de paleta:
- * ganho x perdido saem com ΔE 12,8 no pior caso de daltonismo, e as três
- * origens com 12,4. Trocar qualquer um destes hexadecimais sem revalidar
- * quebra a leitura para quem não enxerga cor como a maioria.
+ * A paleta vive em `lib/cores-grafico.ts` — validada uma vez, usada por todos
+ * os painéis. Ver lá por que ela não usa as cores da interface.
  */
-const COR = {
-  serie: '#0f7c62', // verde-500 — série única, sem vizinho para confundir
-  ganho: '#2c957d', // verde-400
-  perdido: '#b91c1c', // perigo-600
-  origem: ['#2c957d', '#bd9a00', '#2563eb'],
-  grade: '#eef0ee',
-  eixo: '#939a95',
-} as const
-
-const EIXO = {
-  tick: { fill: COR.eixo, fontSize: 11 },
-  axisLine: false,
-  tickLine: false,
-} as const
 
 function Dica({
   ativo,

@@ -3,13 +3,14 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { useState } from 'react'
 import { Logo, Simbolo } from '@/components/Logo'
-import { NAVEGACAO, type ItemNavegacao } from '@/lib/navegacao'
+import {
+  NAVEGACAO,
+  caiEmRota,
+  subitemAtivo,
+  type ItemNavegacao,
+} from '@/lib/navegacao'
 import { cn } from '@/lib/cn'
 import type { Membro } from '@/lib/sessao'
-
-function estaAtivo(href: string, caminho: string) {
-  return href === '/' ? caminho === '/' : caminho.startsWith(href)
-}
 
 function iniciaisDe(nome: string) {
   return nome
@@ -24,56 +25,92 @@ function Itens({
   itens,
   caminho,
   recolhida,
+  ehAdmin,
   aoNavegar,
 }: {
   itens: ItemNavegacao[]
   caminho: string
   recolhida: boolean
+  ehAdmin: boolean
   aoNavegar?: () => void
 }) {
   return (
     <nav className="flex flex-col gap-0.5">
       {itens.map((item) => {
-        const ativo = estaAtivo(item.href, caminho)
+        const ativo = caiEmRota(item.href, caminho)
+        const subitens = (item.subitens ?? []).filter(
+          (sub) => !sub.somenteAdmin || ehAdmin,
+        )
+        // As subabas só aparecem sob o grupo em que se está. Deixar todas
+        // abertas o tempo todo transformaria a barra numa lista de dezesseis
+        // links, que é exatamente a lista plana que esta mudança desfez.
+        const mostrarSubitens = !recolhida && ativo && subitens.length > 0
+        const subAtiva = mostrarSubitens ? subitemAtivo(subitens, caminho) : null
+
         return (
-          <Link
-            key={item.href}
-            href={item.href}
-            onClick={aoNavegar}
-            aria-current={ativo ? 'page' : undefined}
-            // Recolhida, o rótulo some da tela mas continua no `title`: é a
-            // única pista que sobra de qual ícone é qual.
-            title={recolhida ? `${item.rotulo} — ${item.descricao}` : undefined}
-            className={cn(
-              'group relative flex items-center gap-3 rounded-lg py-2.5 transition-colors',
-              recolhida ? 'justify-center px-0' : 'px-3',
-              ativo
-                ? 'bg-white/10 text-white'
-                : 'text-tinta-400 hover:bg-white/5 hover:text-white',
-            )}
-          >
-            {ativo && (
-              <span
-                aria-hidden="true"
-                className="absolute top-1/2 left-0 h-5 w-0.5 -translate-y-1/2 rounded-r-full bg-amarelo-400"
-              />
-            )}
-            <span
+          <div key={item.href}>
+            <Link
+              href={item.href}
+              onClick={aoNavegar}
+              aria-current={ativo && subitens.length === 0 ? 'page' : undefined}
+              // Recolhida, o rótulo some da tela mas continua no `title`: é a
+              // única pista que sobra de qual ícone é qual.
+              title={recolhida ? `${item.rotulo} — ${item.descricao}` : undefined}
               className={cn(
-                ativo ? 'text-amarelo-400' : 'text-tinta-500 group-hover:text-tinta-300',
+                'group relative flex items-center gap-3 rounded-lg py-2.5 transition-colors',
+                recolhida ? 'justify-center px-0' : 'px-3',
+                ativo
+                  ? 'bg-white/10 text-white'
+                  : 'text-tinta-400 hover:bg-white/5 hover:text-white',
               )}
             >
-              {item.icone}
-            </span>
-            {!recolhida && (
-              <span className="min-w-0">
-                <span className="block text-sm font-semibold">{item.rotulo}</span>
-                <span className="block truncate text-[0.7rem] text-tinta-500">
-                  {item.descricao}
-                </span>
+              {ativo && (
+                <span
+                  aria-hidden="true"
+                  className="absolute top-1/2 left-0 h-5 w-0.5 -translate-y-1/2 rounded-r-full bg-amarelo-400"
+                />
+              )}
+              <span
+                className={cn(
+                  ativo ? 'text-amarelo-400' : 'text-tinta-500 group-hover:text-tinta-300',
+                )}
+              >
+                {item.icone}
               </span>
+              {!recolhida && (
+                <span className="min-w-0">
+                  <span className="block text-sm font-semibold">{item.rotulo}</span>
+                  <span className="block truncate text-[0.7rem] text-tinta-500">
+                    {item.descricao}
+                  </span>
+                </span>
+              )}
+            </Link>
+
+            {mostrarSubitens && (
+              <div className="relative mt-0.5 mb-1 ml-[1.6rem] flex flex-col gap-px border-l border-white/10 pl-3">
+                {subitens.map((sub) => {
+                  const subEhAtiva = sub.href === subAtiva
+                  return (
+                    <Link
+                      key={sub.href}
+                      href={sub.href}
+                      onClick={aoNavegar}
+                      aria-current={subEhAtiva ? 'page' : undefined}
+                      className={cn(
+                        'rounded-md px-2.5 py-1.5 text-[0.8rem] font-medium transition-colors',
+                        subEhAtiva
+                          ? 'bg-white/10 font-semibold text-white'
+                          : 'text-tinta-400 hover:bg-white/5 hover:text-white',
+                      )}
+                    >
+                      {sub.rotulo}
+                    </Link>
+                  )
+                })}
+              </div>
             )}
-          </Link>
+          </div>
         )
       })}
     </nav>
@@ -185,6 +222,7 @@ export function BarraLateral({
             itens={itens}
             caminho={caminho}
             recolhida={estreita}
+            ehAdmin={membro.papel === 'admin'}
             aoNavegar={aoNavegar}
           />
         </div>
