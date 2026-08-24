@@ -1,5 +1,6 @@
 import type { Metadata } from 'next'
 import { Logo, Simbolo, MarcaDagua } from '@/components/Logo'
+import { LogoGiratorio3D } from '@/components/LogoGiratorio3D'
 import { DOMINIO_PERMITIDO } from '@/lib/sessao'
 import { BotaoGoogle } from './BotaoGoogle'
 
@@ -25,7 +26,7 @@ export default async function PaginaLogin({
           símbolo em marca d'água. A lista de recursos que ficava aqui saiu:
           quem chega nesta tela já trabalha no time e não precisa ser vendido. */}
       <aside className="relative hidden flex-col justify-between overflow-hidden bg-tinta-950 p-12 lg:flex">
-        <MarcaDagua className="-right-[14%] -bottom-[18%] w-[88%] opacity-[0.09]" />
+        <LogoGiratorio3D className="-right-[16%] -bottom-[20%] w-[70%]" />
         <div
           aria-hidden="true"
           className="pointer-events-none absolute -top-24 -right-24 size-96 rounded-full bg-verde-600/25 blur-3xl"
