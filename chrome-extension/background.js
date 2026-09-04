@@ -177,3 +177,12 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
 
 chrome.runtime.onInstalled.addListener(esvaziarFila)
 chrome.runtime.onStartup.addListener(esvaziarFila)
+
+// A fila só esvaziava ao reiniciar o Chrome ou reinstalar a extensão — se o
+// motivo da falha for do lado do CRM (n8n fora do ar, workflow não ativado),
+// a captura ficava presa até alguém pensar em recarregar a extensão à mão.
+// Um alarme periódico fecha esse buraco sem precisar de reload nenhum.
+chrome.alarms.create('esvaziarFila', { periodInMinutes: 2 })
+chrome.alarms.onAlarm.addListener((alarm) => {
+  if (alarm.name === 'esvaziarFila') esvaziarFila()
+})
