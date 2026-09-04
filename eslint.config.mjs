@@ -12,6 +12,9 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // A extensão do Chrome é JS de navegador com as APIs do `chrome.*`, fora
+    // do projeto TypeScript — as regras do Next não se aplicam a ela.
+    "chrome-extension/**",
   ]),
 ]);
 

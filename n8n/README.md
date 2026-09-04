@@ -381,6 +381,56 @@ Um índice parcial garante **um publicado por mês** (`idx_relatorios_publicado_
 - **Quem publica relatório** (Bloqueador 3): qualquer membro. É a opção menos restritiva porque o relatório já nasce revisado por gente e a EJ é pequena — restringir depois é uma linha, liberar depois exige convencer alguém.
 - **RD/RP** (Premissa da Seção 8): assumidos como "Reunião Diagnóstica" e "Reunião de Proposta". São os nomes padrão em consultoria, mas o PRD pede confirmação — se estiverem errados, é um `update` em `tipos_atividade.nome`.
 
+## Extensão do Chrome
+
+Veio do repositório `ProjetoApollo`, onde estava presa ao app antigo. O código vive agora em [`chrome-extension/`](../chrome-extension/); schema em `sql/014_extensao_tokens.sql` e `sql/015_eventos_funil_por_contato.sql`.
+
+### Por que ela não tinha vindo antes
+
+Não foi esquecimento — ela estava amarrada ao ProspectAI em três camadas independentes, e mexer numa sem as outras não adiantava:
+
+1. **Endereço fixo no código.** `background.js` tinha `API_BASE_PROD = 'https://projeto-apollo.vercel.app'`, e o `manifest.json` só autorizava esse domínio em `host_permissions`. O Chrome MV3 bloqueia requisição para host fora dessa lista, então trocar só a URL não funcionaria.
+2. **Autenticação de outro sistema.** Ela mandava `X-Session-Token`, um cookie do NextAuth que o app antigo validava, e tirava a aba do membro de `session.user.memberTab`. O CRM usa Supabase Auth com `member_profiles.aba_planilha`.
+3. **Caminho paralelo até a planilha.** Ela chamava `POST /api/prospection` do app antigo, que falava direto com o Google Sheets. O CRM já tinha o W4 (`/apollo/linkedin-captura`) fazendo exatamente isso — e **nada no CRM o chamava**: era um webhook esperando um cliente que nunca aparecia.
+
+### O que a migração mudou
+
+**Autenticação virou token próprio.** O membro gera em `/extensao`, cola no popup uma vez. O banco guarda só o SHA-256 (`extensao_tokens`); o segredo aparece uma vez, na criação. Não dá para reaproveitar a sessão do Supabase: o cookie é httpOnly e rotaciona, e o service worker da extensão não tem como acompanhar.
+
+`/api/extensao` entrou em `ROTAS_PUBLICAS` do `proxy.ts`. **Não é rota pública** — é autenticada de outro jeito. Sem isso o proxy devolveria 401 antes de a rota rodar, e a extensão nunca chegaria a se identificar.
+
+**Os detectores passaram a falar pelo background.** No MV3, `fetch` de content script sai com a origem da página (`linkedin.com`) e é barrado por CORS; do service worker, para host em `host_permissions`, não passa por CORS nenhum. Na versão antiga os detectores chamavam a API direto do content script — o que só funcionava se o servidor mandasse cabeçalho de CORS. Agora mandam mensagem para o `background.js`.
+
+**A captura agora usa o W4.** `POST /api/extensao/prospeccao` traduz token → membro → aba da planilha e repassa. Nenhuma regra de negócio nova: o W4 já gravava na planilha e fazia upsert em `organizacoes`/`contatos`.
+
+**A `key` do manifest ficou.** Ela fixa o ID da extensão, então quem já tinha a versão antiga instalada recebe atualização em vez de uma extensão nova ao lado.
+
+### Aceite e resposta deixaram de ser manuais no LinkedIn
+
+`acceptance-detector.js` e `reply-detector.js` já existiam e já funcionavam — detectam no LinkedIn quem aceitou a conexão e quem respondeu, sem ninguém marcar nada. Só reportavam para o app errado.
+
+Isso contradiz uma premissa do PRD de Insights (Seção 5.1.1 e Bloqueador 2), que dizia que nada detectava esses dois eventos automaticamente. Verdade para **email** — ninguém lê a caixa de entrada institucional. Falso para **LinkedIn** desde antes do CRM existir.
+
+O botão manual na tela do lead continua: ele cobre o email. Os dois caminhos convivem — um grava por `lead_cnpj`, o outro por `contato_id`.
+
+### Por que o evento passou a aceitar contato além de lead
+
+`funil_prospeccao_eventos` nasceu chaveada por `lead_cnpj`, porque o caminho previsto era o email: o W3 dispara para um lead da Receita Federal, que tem CNPJ.
+
+O LinkedIn conhece uma **pessoa** — nome e URL de perfil. E a empresa por trás frequentemente não tem CNPJ no CRM, porque foi cadastrada pela própria captura do LinkedIn, que não tem de onde tirar um. A migração 015 torna `lead_cnpj` anulável, acrescenta `contato_id` e `canal`, e exige que pelo menos um dos dois esteja preenchido.
+
+A deduplicação virou dois índices parciais. O antigo era `unique (lead_cnpj, tipo_evento)`; com `lead_cnpj` anulável ele deixaria de servir para o LinkedIn, porque NULLs não colidem entre si num índice único do Postgres — e os detectores varrem a mesma tela a cada 30 segundos. Uma tarde com o LinkedIn aberto inflaria a taxa de aceite do mês em dezenas de vezes.
+
+### Como um nome do LinkedIn vira um lead do CRM
+
+Pela URL do perfil quando ela vem (`contatos.linkedin_url`, identidade exata), e por nome quando não vem. O casamento por nome exige que todas as palavras com mais de duas letras do nome mais curto apareçam no mais longo, e que sejam pelo menos duas — um sobrenome em comum é evidência, um primeiro nome sozinho não é.
+
+A busca é limitada aos contatos que **aquele membro** cadastrou (`criado_por_email`). Sem esse recorte, a rede pessoal de uma pessoa marcaria como aceito o lead que outra estava trabalhando: as duas podem conhecer a mesma pessoa no LinkedIn, e só uma a prospectou.
+
+### O que ficou para trás
+
+`agent-mode.js`, `agent-mode-apollo.js`, `agent-mode-csv.js`, `agent-mode-linkedin.js` e `apollo-interceptor.js` — cerca de 2.300 linhas de automação do Apollo.io e processamento de CSV. Elas chamam `/api/agent/process`, `/api/agent/process-apollo` e afins, que não existem no CRM. Trazê-las junto seria trazer código morto que falha em silêncio. Continuam no histórico do `ProjetoApollo` e podem vir depois, com as rotas que elas precisam.
+
 ### O que ficou de fora desta rodada
 
 - **UI/telas** — fora de escopo por decisão explícita da especificação (Seção 7 dela: "Telas, layout e componentes de UI ficam para uma etapa posterior").

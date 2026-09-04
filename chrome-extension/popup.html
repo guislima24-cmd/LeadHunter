@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8" />
+  <title>Núcleo Comercial</title>
+  <style>
+    :root {
+      --verde: #00634a;
+      --verde-claro: #e8f2ee;
+      --amarelo: #ffd100;
+      --tinta-900: #16201b;
+      --tinta-600: #57605a;
+      --tinta-400: #939a95;
+      --tinta-200: #dfe3e0;
+      --tinta-50: #f6f7f6;
+      --perigo: #b91c1c;
+    }
+    * { box-sizing: border-box; }
+    body {
+      width: 340px; margin: 0; padding: 16px;
+      font: 13px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif;
+      color: var(--tinta-900); background: #fff;
+    }
+    header { display: flex; align-items: center; gap: 8px; margin-bottom: 14px; }
+    header img { width: 26px; height: 26px; }
+    header b { font-size: 13px; }
+    header span { display: block; font-size: 11px; color: var(--tinta-400); font-weight: 400; }
+
+    .estado {
+      display: flex; align-items: center; gap: 7px;
+      padding: 9px 11px; border-radius: 9px; font-size: 12px; font-weight: 600;
+      margin-bottom: 12px;
+    }
+    .estado.ok { background: var(--verde-claro); color: var(--verde); }
+    .estado.off { background: #fdeaea; color: var(--perigo); }
+    .ponto { width: 7px; height: 7px; border-radius: 50%; background: currentColor; flex: none; }
+
+    label { display: block; font-size: 11px; font-weight: 600; color: var(--tinta-600); margin-bottom: 5px; }
+    input[type=password], input[type=text] {
+      width: 100%; padding: 8px 10px; border: 1px solid var(--tinta-200);
+      border-radius: 8px; font-size: 12px; font-family: ui-monospace, monospace;
+    }
+    input:focus { outline: none; border-color: var(--verde); box-shadow: 0 0 0 3px rgba(0,99,74,.12); }
+
+    button {
+      width: 100%; padding: 9px; margin-top: 8px; border: 0; border-radius: 8px;
+      background: var(--verde); color: #fff; font-size: 12px; font-weight: 700;
+      cursor: pointer; font-family: inherit;
+    }
+    button:hover { background: #004f3b; }
+    button.secundario { background: #fff; color: var(--tinta-600); border: 1px solid var(--tinta-200); }
+    button.secundario:hover { background: var(--tinta-50); }
+
+    .ajuda { font-size: 11px; color: var(--tinta-400); line-height: 1.5; margin: 8px 0 0; }
+    .ajuda a { color: var(--verde); font-weight: 600; }
+
+    hr { border: 0; border-top: 1px solid var(--tinta-200); margin: 14px 0; }
+    h2 { font-size: 11px; text-transform: uppercase; letter-spacing: .04em;
+         color: var(--tinta-400); margin: 0 0 8px; }
+    ul { list-style: none; margin: 0; padding: 0; }
+    li { padding: 7px 0; border-bottom: 1px solid var(--tinta-50); font-size: 12px; }
+    li:last-child { border-bottom: 0; }
+    li b { display: block; font-weight: 600; }
+    li span { color: var(--tinta-400); font-size: 11px; }
+    .vazio { color: var(--tinta-400); font-size: 12px; padding: 10px 0; }
+    .fila { font-size: 11px; color: var(--tinta-600); margin-top: 8px; }
+  </style>
+</head>
+<body>
+  <header>
+    <img src="icons/icon48.png" alt="" />
+    <b>Núcleo Comercial<span>UFABC Júnior</span></b>
+  </header>
+
+  <div id="estado" class="estado off">
+    <i class="ponto"></i><span id="estadoTexto">Não conectado</span>
+  </div>
+
+  <div id="blocoToken">
+    <label for="token">Token da extensão</label>
+    <input id="token" type="password" placeholder="lhx_…" autocomplete="off" />
+    <button id="salvar">Conectar</button>
+    <p class="ajuda">
+      Gere o token no CRM em <b>Extensão</b> e cole aqui. Ele aparece uma vez só.
+      <a href="#" id="abrirCrm">Abrir o CRM</a>
+    </p>
+  </div>
+
+  <div id="blocoConectado" hidden>
+    <button id="desconectar" class="secundario">Desconectar este computador</button>
+  </div>
+
+  <hr />
+
+  <h2>Últimas capturas</h2>
+  <ul id="recentes"></ul>
+  <p id="semRecentes" class="vazio">
+    Nenhuma ainda. Abra um perfil no LinkedIn e envie o convite — a captura é
+    automática.
+  </p>
+  <p id="fila" class="fila" hidden></p>
+
+  <script src="popup.js"></script>
+</body>
+</html>

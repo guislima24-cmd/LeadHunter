@@ -38,6 +38,7 @@ workflows com a identidade certa e mostra o resultado.
 | `/insights/relatorios/gerar` | Gera o relatório do mês com IA (nasce rascunho) ou à mão | — |
 | `/pipeline` | Redireciona para `/negocios` — o quadro deixou de ter aba própria | — |
 | `/precificacao` | Orçamentos abertos e o resumo da régua de preço | — |
+| `/extensao` | Conectar a extensão do Chrome: gerar e revogar o token do dispositivo | W4 |
 | `/precificacao/[id]` | Calculadora do orçamento: serviços, esforço, complexidade do escopo e os três níveis de preço | — |
 | `/precificacao/referencia` | A régua editável — taxa/hora por porte, pontos de complexidade, capacidade e impostos — **só administradores** | — |
 | `/monitoramento` | Falhas das automações e consumo de Tavily/Maps — **só administradores** | W9 |
@@ -147,6 +148,7 @@ lib/
   relatorio-ia.ts    redação do relatório mensal pela API da Anthropic
   cores-grafico.ts   a paleta validada dos gráficos
 n8n/                 documentação e SQL das automações
+chrome-extension/    a extensão que captura o LinkedIn (ver README de lá)
 proxy.ts             sessão + bloqueio de acesso anônimo
 ```
 

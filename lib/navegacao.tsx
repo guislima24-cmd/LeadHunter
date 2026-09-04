@@ -118,6 +118,17 @@ export const NAVEGACAO: ItemNavegacao[] = [
     ),
   },
   {
+    href: '/extensao',
+    rotulo: 'Extensão',
+    descricao: 'Captura do LinkedIn',
+    icone: (
+      <svg viewBox="0 0 24 24" {...props}>
+        <path d="M12 3a9 9 0 1 0 9 9h-9V3Z" />
+        <path d="M12 12 5.6 5.6M12 12l7.8 4.5" />
+      </svg>
+    ),
+  },
+  {
     href: '/monitoramento',
     rotulo: 'Monitoramento',
     descricao: 'Falhas e custos',

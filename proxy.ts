@@ -13,7 +13,14 @@ import { NextResponse, type NextRequest } from 'next/server'
 // `/api/saude` fica aberta de propósito: é como se confere, depois de um
 // deploy, que o ambiente subiu configurado — sem precisar de sessão. Ela só
 // devolve booleanos, nunca valor de chave nem dado de negócio.
-const ROTAS_PUBLICAS = ['/login', '/auth', '/api/saude']
+//
+// `/api/extensao` não é pública: é **autenticada de outro jeito**. A extensão
+// do Chrome roda no navegador do membro, em outro domínio, e o service worker
+// dela não enxerga o cookie de sessão do Supabase — então ela manda um token
+// próprio no cabeçalho `X-Extensao-Token`, que cada rota valida antes de
+// qualquer coisa (ver `lib/extensao.ts`). Sem esta linha o proxy devolveria
+// 401 antes de a rota rodar, e a extensão nunca chegaria a se identificar.
+const ROTAS_PUBLICAS = ['/login', '/auth', '/api/saude', '/api/extensao']
 
 export async function proxy(request: NextRequest) {
   let resposta = NextResponse.next({ request })
