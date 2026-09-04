@@ -14,7 +14,6 @@ export const ROTAS_N8N = {
   gerarLista: '/leadhunter/gerar-lista',
   enriquecer: '/leadhunter/enriquecer',
   prospectar: '/leadhunter/prospectar',
-  linkedin: '/apollo/linkedin-captura',
   maps: '/apollo/maps',
 } as const
 

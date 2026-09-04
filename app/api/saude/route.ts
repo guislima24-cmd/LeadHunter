@@ -130,6 +130,12 @@ export async function GET() {
   // ausência é informação, não falha.
   const opcionais = {
     N8N_WEBHOOK_BASE: Boolean(process.env.N8N_WEBHOOK_BASE),
+    // Sem isso a captura de perfil da extensão responde 503 — ver lib/planilha.ts.
+    GOOGLE_SHEETS_CONFIGURADO: Boolean(
+      process.env.GOOGLE_SHEETS_ID &&
+        (process.env.GOOGLE_CREDENTIALS_JSON ||
+          (process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL && process.env.GOOGLE_PRIVATE_KEY)),
+    ),
   }
 
   const tudoOk =

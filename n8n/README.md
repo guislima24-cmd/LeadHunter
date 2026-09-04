@@ -285,6 +285,19 @@ O nó de leitura do **mesmo** workflow (`Buscar Linha do Perfil`), lendo a **mes
 
 `Google Sheets account` (`y7Qjl9cVell53bFu`) ficou órfã: nenhum nó de nenhum workflow a referencia mais. Dá para reconectar na UI do n8n se quiser reaproveitá-la, ou excluir.
 
+### 04/09/2026 — W4 saiu do n8n
+
+O trial do n8n Cloud (`guizo.app.n8n.cloud`) expirou 14 dias depois das credenciais conectadas, e os 9 workflows ficaram **pausados** (dados retidos, não apagados — `Download my workflows` na UI exporta o JSON de todos). O usuário optou por não assinar por enquanto, mas pediu que a extensão do Chrome continuasse funcionando de qualquer jeito, como já funcionava antes de o ProspectAI virar LeadHunter.
+
+W1, W3, W5, W6 e W7 seguem dependendo do n8n e ficam pausados até alguém reativar a assinatura ou reconstruir a lógica deles fora dali — não foi mexido. **Só o W4 foi reimplementado direto no CRM**, porque a extensão é pequena o bastante (duas gravações simples) para não valer manter uma automação inteira pausada por causa dela:
+
+- `lib/planilha.ts` — o equivalente ao nó "Gravar na Aba do Membro" + "Resolver ID Sync": escreve C/E/F/G/I na aba do membro, casa por `Número/Link` para não duplicar quem já foi prospectado, preserva o `ID_Sync` existente (e cria a coluna V com o cabeçalho quando falta), e anexa o cargo em `Observações`. Usa uma conta de serviço do Google Cloud (`GOOGLE_CREDENTIALS_JSON` ou o par `GOOGLE_SERVICE_ACCOUNT_EMAIL`/`GOOGLE_PRIVATE_KEY`) em vez do OAuth que o n8n usava — mais simples de manter num serviço sem interface, e o mesmo padrão que o ProspectAI já usava antes da migração para n8n.
+- `crm_registrar_captura_linkedin` (migração `016_crm_captura_linkedin.sql`) — o equivalente ao nó "Gravar Organizacao e Contato no CRM": mesma regra de dedupe (organização por nome, já que uma captura do LinkedIn não traz CNPJ; contato por `linkedin_url`), mas resolve `criado_por_email` direto do token da extensão em vez de casar `aba_planilha = membro` como o n8n precisava fazer.
+
+`app/api/extensao/prospeccao/route.ts` chama as duas em sequência, sem `chamarN8n` — a planilha primeiro (é o que o time usa de verdade no dia a dia), o CRM depois e com falha só logada, não devolvida como erro, mesmo espírito do `onError: continueRegularOutput` que o node do W4 tinha.
+
+`app/api/extensao/eventos` (aceite de conexão e resposta) nunca dependeu do n8n — já escrevia direto em `funil_prospeccao_eventos` — então não precisou de nada.
+
 ### Notificação de atividade com prazo vencendo
 
 `GET /api/cron/atividades-vencendo` (agendado em `vercel.json`, uma vez por dia — o plano Hobby do Vercel não permite cron mais frequente que diário) cria uma linha em `notificacoes` para toda atividade não concluída com prazo nas próximas 24h ou já vencido, sem duplicar enquanto a notificação anterior seguir não lida. **Só cria a notificação in-app** — não envia email. A especificação pede o mesmo padrão de alerta do W9 (email com link direto), mas isso é um novo fluxo de envio dentro do n8n, fora do que uma rota Next.js sozinha resolve; fica registrado como próximo passo.

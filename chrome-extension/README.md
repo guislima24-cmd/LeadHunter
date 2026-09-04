@@ -69,8 +69,8 @@ Aqui os detectores mandam mensagem para o `background.js`, que faz a chamada.
 
 | Rota | Quando |
 |---|---|
-| `POST /api/extensao/prospeccao` | Captura de perfil → repassa ao W4, que grava na planilha e no Postgres |
-| `POST /api/extensao/eventos` | Aceite e resposta → `funil_prospeccao_eventos` |
+| `POST /api/extensao/prospeccao` | Captura de perfil → grava na planilha (`lib/planilha.ts`) e no Postgres (`crm_registrar_captura_linkedin`), sem n8n — ver "04/09/2026" em `n8n/README.md` |
+| `POST /api/extensao/eventos` | Aceite e resposta → `funil_prospeccao_eventos`, direto, nunca passou por n8n |
 
 Todas exigem o cabeçalho `X-Extensao-Token`. O token é revogável a qualquer
 momento na tela **Extensão** do CRM.
