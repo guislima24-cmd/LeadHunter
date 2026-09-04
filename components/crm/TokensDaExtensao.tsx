@@ -101,8 +101,8 @@ export function TokensDaExtensao({ tokens }: { tokens: TokenNaLista[] }) {
             </Button>
           </div>
           <ol className="mt-4 space-y-1 text-xs leading-relaxed text-verde-800">
-            <li>1. Abra a extensão ProspectAI no Chrome.</li>
-            <li>2. Cole o token no campo de conexão e salve.</li>
+            <li>1. Clique no ícone da extensão na barra do Chrome.</li>
+            <li>2. Cole o token no campo de conexão e clique em Conectar.</li>
             <li>
               3. Pronto — as capturas do LinkedIn passam a cair na sua aba da
               planilha e no CRM.
@@ -120,7 +120,7 @@ export function TokensDaExtensao({ tokens }: { tokens: TokenNaLista[] }) {
 
       <Card>
         <CardCabecalho
-          titulo="Conectar a extensão"
+          titulo="2. Gerar o seu token"
           descricao="Dê um nome ao computador para reconhecer o token depois — “Notebook”, “PC do lab”."
         />
         <div className="flex flex-wrap items-end gap-2 p-5">
