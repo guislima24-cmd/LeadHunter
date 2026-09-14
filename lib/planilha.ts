@@ -98,38 +98,63 @@ function escaparQuebrasDentroDeStrings(bruto: string): string {
   return saida
 }
 
+/**
+ * Formas em que o mesmo arquivo de chave costuma chegar aqui.
+ *
+ * Quem configura copia o JSON de algum lugar e cola num campo de painel, e
+ * cada combinação dessas mutila o texto de um jeito que continua parecendo
+ * certo na tela: visualizador de JSON copia os campos **sem** as chaves de
+ * fora; editor ou campo de formulário transforma os `\n` da chave privada em
+ * quebra de linha de verdade; painel guarda o valor entre aspas. Nenhuma
+ * dessas é erro de quem colou — são detalhes invisíveis de ferramenta.
+ *
+ * Em vez de exigir a forma exata, tentamos as variantes e ficamos com a
+ * primeira que produzir uma credencial completa. Só uma delas pode dar certo:
+ * o critério de aceite é ter `client_email` e `private_key`, não só parsear.
+ */
+function* variantesDaCredencial(bruto: string): Generator<string> {
+  const base = bruto.trim()
+  const formas = [base]
+
+  if (!base.startsWith('{')) formas.push(`{${base}}`)
+
+  if (base.length > 1 && base.startsWith('"') && base.endsWith('"')) {
+    const semAspas = base.slice(1, -1)
+    formas.push(semAspas)
+    if (!semAspas.startsWith('{')) formas.push(`{${semAspas}}`)
+  }
+
+  for (const forma of formas) {
+    yield forma
+    const escapada = escaparQuebrasDentroDeStrings(forma)
+    if (escapada !== forma) yield escapada
+  }
+}
+
 function obterCredenciais(): { client_email: string; private_key: string } {
   const bruto = process.env.GOOGLE_CREDENTIALS_JSON
   if (bruto) {
-    let texto = bruto.trim()
-    // Alguns painéis guardam o valor colado entre aspas.
-    if (texto.startsWith('"') && texto.endsWith('"') && !texto.startsWith('{')) {
-      texto = texto.slice(1, -1)
-    }
-
-    let json: { client_email?: string; private_key?: string }
-    try {
-      json = JSON.parse(texto)
-    } catch {
+    for (const variante of variantesDaCredencial(bruto)) {
+      let json: { client_email?: string; private_key?: string }
       try {
-        json = JSON.parse(escaparQuebrasDentroDeStrings(texto))
-      } catch (erro) {
-        throw new PlanilhaNaoConfiguradaError(
-          `GOOGLE_CREDENTIALS_JSON não é um JSON válido (${
-            erro instanceof Error ? erro.message : 'erro desconhecido'
-          }). Tamanho recebido: ${texto.length} caracteres; começa com "${texto.slice(0, 1)}" e termina com "${texto.slice(-1)}".`,
-        )
+        json = JSON.parse(variante)
+      } catch {
+        continue
+      }
+      if (json?.client_email && json?.private_key) {
+        return {
+          client_email: json.client_email,
+          private_key: normalizarChavePrivada(json.private_key),
+        }
       }
     }
-    if (!json.client_email || !json.private_key) {
-      throw new PlanilhaNaoConfiguradaError(
-        'GOOGLE_CREDENTIALS_JSON precisa ter client_email e private_key.',
-      )
-    }
-    return {
-      client_email: json.client_email,
-      private_key: normalizarChavePrivada(json.private_key),
-    }
+
+    const texto = bruto.trim()
+    throw new PlanilhaNaoConfiguradaError(
+      `GOOGLE_CREDENTIALS_JSON não pôde ser lida como credencial de conta de serviço. ` +
+        `Tamanho recebido: ${texto.length} caracteres; começa com "${texto.slice(0, 1)}" e termina com "${texto.slice(-1)}". ` +
+        `Esperado um JSON com client_email e private_key.`,
+    )
   }
 
   const email = process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL
