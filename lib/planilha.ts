@@ -476,12 +476,39 @@ const LINHAS_VAZIAS_QUE_ENCERRAM_O_BLOCO = 20
  * Olha a linha inteira, não uma coluna só: nesta planilha a coluna A (`Alvo`)
  * fica vazia na maioria das linhas preenchidas.
  */
+/**
+ * Colunas que dizem se uma linha é um contato de verdade.
+ *
+ * Olhar "qualquer célula preenchida" não serve, e a razão é invisível na
+ * tela: a coluna M (`No show?`) é uma caixa de seleção, e o template tem
+ * caixas pré-inseridas centenas de linhas abaixo do fim dos dados. Caixa
+ * desmarcada não é célula vazia — vale `FALSE`. Então, para a API, todas
+ * aquelas linhas em branco têm conteúdo, e a busca pelo fim da tabela ia até
+ * a última delas. Foi assim que a captura foi parar na linha 1002.
+ *
+ * São as mesmas colunas que este código escreve: se nenhuma delas está
+ * preenchida, não há contato ali, só andaime do template.
+ */
+const COLUNAS_QUE_IDENTIFICAM_CONTATO = [
+  COL.canal,
+  COL.empresa,
+  COL.nome,
+  COL.numeroLink,
+  COL.dataConexao,
+]
+
+function temContato(linha: string[] | undefined): boolean {
+  return COLUNAS_QUE_IDENTIFICAM_CONTATO.some((col) =>
+    String(linha?.[col] ?? '').trim(),
+  )
+}
+
 function ultimaLinhaDoBloco(linhas: string[][]): number {
   let ultima = PRIMEIRA_LINHA_DE_DADOS - 1
   let vaziasSeguidas = 0
 
   for (let i = PRIMEIRA_LINHA_DE_DADOS - 1; i < linhas.length; i++) {
-    if (linhas[i]?.some((celula) => String(celula ?? '').trim())) {
+    if (temContato(linhas[i])) {
       ultima = i + 1
       vaziasSeguidas = 0
       continue
