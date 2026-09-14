@@ -1,5 +1,5 @@
 import { criarClienteAdmin } from '@/lib/supabase/admin'
-import { verificarAcessoAPlanilha } from '@/lib/planilha'
+import { diagnosticarBloco, verificarAcessoAPlanilha } from '@/lib/planilha'
 
 /**
  * Verificação de configuração do ambiente.
@@ -115,12 +115,22 @@ async function checarProvedorGoogle(): Promise<Checagem> {
   }
 }
 
-export async function GET() {
+export async function GET(req: Request) {
   const [banco, google, planilha] = await Promise.all([
     checarBanco(),
     checarProvedorGoogle(),
     verificarAcessoAPlanilha(),
   ])
+
+  // `?aba=Anna` explica onde a captura seria gravada naquela aba e o que há
+  // abaixo da tabela. Só números de linha e letras de coluna saem por aqui.
+  const abaPedida = new URL(req.url).searchParams.get('aba')
+  let bloco: unknown
+  if (abaPedida && planilha.ok) {
+    bloco = await diagnosticarBloco(abaPedida).catch((erro) => ({
+      erro: erro instanceof Error ? erro.message : 'falha desconhecida',
+    }))
+  }
 
   const obrigatorias = {
     NEXT_PUBLIC_SUPABASE_URL: Boolean(process.env.NEXT_PUBLIC_SUPABASE_URL),
@@ -153,6 +163,7 @@ export async function GET() {
       banco,
       google,
       planilha,
+      ...(bloco ? { bloco } : {}),
       chaveServico: diagnosticarChave(),
       verificadoEm: new Date().toISOString(),
     },

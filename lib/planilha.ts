@@ -276,6 +276,54 @@ export async function verificarAcessoAPlanilha(): Promise<DiagnosticoPlanilha> {
   }
 }
 
+export interface DiagnosticoDaAba {
+  aba: string
+  /** Quantas linhas o Google devolveu — é a última linha com conteúdo da aba. */
+  totalDeLinhasLidas: number
+  /** Onde este código acha que a tabela do time termina. */
+  ultimaLinhaDoBloco: number
+  /** Linha onde a próxima captura seria gravada. */
+  proximaLinha: number
+  /** Linhas com conteúdo **depois** do bloco, e quais colunas estão preenchidas. */
+  conteudoAbaixoDoBloco: { linha: number; colunas: string }[]
+}
+
+/**
+ * Onde a tabela de uma aba termina, e o que existe abaixo dela.
+ *
+ * Existe porque a alternativa é adivinhar: a captura ia parar em linhas que
+ * ninguém encontrava, e sem enxergar o que há no fim da aba não dá para saber
+ * se a regra de corte está certa. Devolve **só números de linha e letras de
+ * coluna** — nenhum valor de célula, já que `/api/saude` é pública.
+ */
+export async function diagnosticarBloco(aba: string): Promise<DiagnosticoDaAba> {
+  const sheets = obterSheets()
+  const leitura = await sheets.spreadsheets.values.get({
+    spreadsheetId: obterIdDaPlanilha(),
+    range: `${citarAba(aba)}!A1:V`,
+  })
+  const linhas = leitura.data.values ?? []
+  const fimDoBloco = ultimaLinhaDoBloco(linhas)
+
+  const conteudoAbaixoDoBloco: { linha: number; colunas: string }[] = []
+  for (let i = fimDoBloco; i < linhas.length; i++) {
+    const preenchidas = (linhas[i] ?? [])
+      .map((celula, col) => (String(celula ?? '').trim() ? String.fromCharCode(65 + col) : ''))
+      .filter(Boolean)
+    if (preenchidas.length) {
+      conteudoAbaixoDoBloco.push({ linha: i + 1, colunas: preenchidas.join('') })
+    }
+  }
+
+  return {
+    aba,
+    totalDeLinhasLidas: linhas.length,
+    ultimaLinhaDoBloco: fimDoBloco,
+    proximaLinha: Math.max(PRIMEIRA_LINHA_DE_DADOS, fimDoBloco + 1),
+    conteudoAbaixoDoBloco: conteudoAbaixoDoBloco.slice(0, 40),
+  }
+}
+
 export interface CapturaLinkedIn {
   nome: string
   empresa: string
