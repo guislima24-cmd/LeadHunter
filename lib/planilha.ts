@@ -53,23 +53,83 @@ function normalizarChavePrivada(chave: string): string {
   return k
 }
 
+/**
+ * Escapa quebras de linha **cruas** que estejam dentro de um texto entre
+ * aspas, para que `JSON.parse` aceite o valor.
+ *
+ * O arquivo de chave que o Google baixa traz a `private_key` com `\n`
+ * escapado, que é o certo. Mas basta o JSON passar por um visualizador, um
+ * formatador de editor ou o campo de texto de um painel — o da Vercel
+ * inclusive — para esses `\n` virarem quebra de linha de verdade. Aí o
+ * arquivo continua parecendo idêntico na tela e o `JSON.parse` recusa, porque
+ * a especificação de JSON não permite caractere de controle cru dentro de uma
+ * string. Consertar aqui é mais honesto do que exigir que quem for configurar
+ * saiba dessa diferença invisível.
+ */
+function escaparQuebrasDentroDeStrings(bruto: string): string {
+  let saida = ''
+  let dentroDeString = false
+  let escapado = false
+
+  for (const ch of bruto) {
+    if (escapado) {
+      saida += ch
+      escapado = false
+      continue
+    }
+    if (ch === '\\') {
+      saida += ch
+      escapado = true
+      continue
+    }
+    if (ch === '"') {
+      dentroDeString = !dentroDeString
+      saida += ch
+      continue
+    }
+    if (dentroDeString && (ch === '\n' || ch === '\r' || ch === '\t')) {
+      // `\r\n` vira um `\n` só: o `\r` é descartado e o `\n` seguinte escapa.
+      if (ch !== '\r') saida += ch === '\n' ? '\\n' : '\\t'
+      continue
+    }
+    saida += ch
+  }
+
+  return saida
+}
+
 function obterCredenciais(): { client_email: string; private_key: string } {
   const bruto = process.env.GOOGLE_CREDENTIALS_JSON
   if (bruto) {
+    let texto = bruto.trim()
+    // Alguns painéis guardam o valor colado entre aspas.
+    if (texto.startsWith('"') && texto.endsWith('"') && !texto.startsWith('{')) {
+      texto = texto.slice(1, -1)
+    }
+
     let json: { client_email?: string; private_key?: string }
     try {
-      json = JSON.parse(bruto.trim())
+      json = JSON.parse(texto)
     } catch {
-      throw new PlanilhaNaoConfiguradaError(
-        'GOOGLE_CREDENTIALS_JSON não é um JSON válido.',
-      )
+      try {
+        json = JSON.parse(escaparQuebrasDentroDeStrings(texto))
+      } catch (erro) {
+        throw new PlanilhaNaoConfiguradaError(
+          `GOOGLE_CREDENTIALS_JSON não é um JSON válido (${
+            erro instanceof Error ? erro.message : 'erro desconhecido'
+          }). Tamanho recebido: ${texto.length} caracteres; começa com "${texto.slice(0, 1)}" e termina com "${texto.slice(-1)}".`,
+        )
+      }
     }
     if (!json.client_email || !json.private_key) {
       throw new PlanilhaNaoConfiguradaError(
         'GOOGLE_CREDENTIALS_JSON precisa ter client_email e private_key.',
       )
     }
-    return { client_email: json.client_email, private_key: json.private_key }
+    return {
+      client_email: json.client_email,
+      private_key: normalizarChavePrivada(json.private_key),
+    }
   }
 
   const email = process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL
@@ -116,6 +176,78 @@ function dataDeHojeBr(): string {
   }).formatToParts(new Date())
   const pegar = (tipo: string) => partes.find((p) => p.type === tipo)?.value ?? ''
   return `${pegar('day')}/${pegar('month')}/${pegar('year')}`
+}
+
+export interface DiagnosticoPlanilha {
+  ok: boolean
+  etapa: 'credencial' | 'autenticacao' | 'acesso' | 'pronto'
+  detalhe?: string
+  /** Endereço da conta de serviço — é com ele que a planilha precisa ser compartilhada. */
+  contaDeServico?: string
+  totalDeAbas?: number
+}
+
+/**
+ * Confere, de ponta a ponta e sem escrever nada, se a integração com a
+ * planilha está de pé: credencial legível, autenticação aceita pelo Google e
+ * planilha acessível pela conta de serviço.
+ *
+ * Existe porque o caminho normal de teste é caro demais para depurar: exige
+ * alguém abrir o LinkedIn e mandar um convite de verdade para descobrir se a
+ * configuração está certa. As três etapas falham por motivos bem diferentes
+ * (JSON malformado, conta apagada, planilha não compartilhada) e a mensagem
+ * de cada uma diz o que fazer.
+ */
+export async function verificarAcessoAPlanilha(): Promise<DiagnosticoPlanilha> {
+  let credenciais: { client_email: string; private_key: string }
+  try {
+    credenciais = obterCredenciais()
+  } catch (erro) {
+    return {
+      ok: false,
+      etapa: 'credencial',
+      detalhe: erro instanceof Error ? erro.message : 'falha desconhecida',
+    }
+  }
+
+  let spreadsheetId: string
+  try {
+    spreadsheetId = obterIdDaPlanilha()
+  } catch (erro) {
+    return {
+      ok: false,
+      etapa: 'credencial',
+      detalhe: erro instanceof Error ? erro.message : 'falha desconhecida',
+      contaDeServico: credenciais.client_email,
+    }
+  }
+
+  try {
+    const sheets = obterSheets()
+    const meta = await sheets.spreadsheets.get({
+      spreadsheetId,
+      fields: 'sheets.properties.title',
+    })
+    return {
+      ok: true,
+      etapa: 'pronto',
+      contaDeServico: credenciais.client_email,
+      totalDeAbas: meta.data.sheets?.length ?? 0,
+    }
+  } catch (erro) {
+    const mensagem = erro instanceof Error ? erro.message : 'falha desconhecida'
+    // "account not found" é conta de serviço apagada; 403 é planilha não
+    // compartilhada com ela. São problemas diferentes, com correções
+    // diferentes, e confundir um com o outro custa uma rodada inteira.
+    const ehAutenticacao =
+      mensagem.includes('invalid_grant') || mensagem.includes('Invalid JWT')
+    return {
+      ok: false,
+      etapa: ehAutenticacao ? 'autenticacao' : 'acesso',
+      detalhe: mensagem,
+      contaDeServico: credenciais.client_email,
+    }
+  }
 }
 
 export interface CapturaLinkedIn {

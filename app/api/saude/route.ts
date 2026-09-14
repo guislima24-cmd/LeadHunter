@@ -1,4 +1,5 @@
 import { criarClienteAdmin } from '@/lib/supabase/admin'
+import { verificarAcessoAPlanilha } from '@/lib/planilha'
 
 /**
  * Verificação de configuração do ambiente.
@@ -115,9 +116,10 @@ async function checarProvedorGoogle(): Promise<Checagem> {
 }
 
 export async function GET() {
-  const [banco, google] = await Promise.all([
+  const [banco, google, planilha] = await Promise.all([
     checarBanco(),
     checarProvedorGoogle(),
+    verificarAcessoAPlanilha(),
   ])
 
   const obrigatorias = {
@@ -138,6 +140,8 @@ export async function GET() {
     ),
   }
 
+  // A planilha entra como informação, não como veredito: ela só afeta a
+  // captura da extensão, e o resto da plataforma funciona sem ela.
   const tudoOk =
     banco.ok && google.ok && Object.values(obrigatorias).every(Boolean)
 
@@ -148,6 +152,7 @@ export async function GET() {
       opcionais,
       banco,
       google,
+      planilha,
       chaveServico: diagnosticarChave(),
       verificadoEm: new Date().toISOString(),
     },
