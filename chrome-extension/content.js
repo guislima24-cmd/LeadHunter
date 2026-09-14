@@ -12,6 +12,38 @@
   if (window.__prospectAiContent) return
   window.__prospectAiContent = true
 
+  // ── Contexto órfão ─────────────────────────────────────────────────────────
+  // Ao recarregar ou atualizar a extensão, o Chrome invalida o contexto deste
+  // script — mas não o remove das abas que já estavam abertas. O script velho
+  // continua lá, com os observadores de DOM ativos, e toda chamada a `chrome.*`
+  // passa a lançar "Extension context invalidated". Como observador de DOM
+  // dispara a cada mudança de página, o erro se repete indefinidamente e
+  // aparece na tela de erros da extensão como se fosse um defeito nela.
+  //
+  // Nada disso é recuperável de dentro da aba: a ligação com a extensão não
+  // volta. O certo é perceber e desligar, deixando um recado de que basta
+  // recarregar a aba.
+
+  const observadores = []
+
+  function contextoValido() {
+    // `chrome.runtime.id` some justamente quando o contexto é invalidado.
+    try {
+      return Boolean(chrome.runtime?.id)
+    } catch {
+      return false
+    }
+  }
+
+  function desligar(motivo) {
+    for (const observador of observadores) observador.disconnect()
+    observadores.length = 0
+    console.info(
+      '[Núcleo Comercial] Script desligado nesta aba (%s). Recarregue a página para voltar a capturar.',
+      motivo,
+    )
+  }
+
   // ── Extração de dados do perfil ────────────────────────────────────────────
 
   /**
@@ -261,6 +293,11 @@
   const DEBOUNCE_MS = 3000
 
   function dispatch(eventData) {
+    if (!contextoValido()) {
+      desligar('a extensão foi recarregada ou atualizada')
+      return
+    }
+
     const now = Date.now()
     if (now - lastSent < DEBOUNCE_MS) return
     lastSent = now
@@ -281,7 +318,13 @@
 
     console.log('[Núcleo Comercial] Prospecção detectada:', payload)
 
-    chrome.runtime.sendMessage({ type: 'PROSPECCAO_DETECTADA', payload })
+    try {
+      chrome.runtime.sendMessage({ type: 'PROSPECCAO_DETECTADA', payload })
+    } catch (erro) {
+      // A checagem acima cobre o caso comum, mas o contexto pode cair entre
+      // ela e o envio — a captura desta vez se perde de qualquer jeito.
+      desligar(erro?.message ?? 'falha ao falar com a extensão')
+    }
   }
 
   // ── Escuta postMessage do interceptor.js (MAIN → ISOLATED) ───────────────
@@ -324,6 +367,7 @@
     })
 
     observer.observe(document.body, { childList: true, subtree: true })
+    observadores.push(observer)
   })()
 
   // ── Detecção de respostas e conexões aceitas ──────────────────────────────
@@ -387,6 +431,7 @@
       checkInboundMessages()
     })
     statusObserver.observe(document.body, { childList: true, subtree: true })
+    observadores.push(statusObserver)
   })()
 
   // ── Botão de teste manual no popup ────────────────────────────────────────
