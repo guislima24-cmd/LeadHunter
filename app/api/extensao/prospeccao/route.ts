@@ -43,14 +43,28 @@ export async function POST(req: Request) {
   const cargo = String(corpo.cargo ?? '').trim()
   const linkedinUrl = String(corpo.linkedinUrl ?? corpo.linkedin_url ?? '').trim()
 
-  if (!nome || !empresa) {
+  // Só o nome é obrigatório. A empresa **não** é: o LinkedIn nem sempre a
+  // expõe de um jeito que dê para ler da página — headline que é lista de
+  // especialidades, perfil sem empresa atual, markup que mudou. Descartar a
+  // captura inteira por causa disso seria perder o lead para não deixar uma
+  // célula em branco, sendo que a pessoa está olhando o perfil na hora e
+  // preenche a empresa em dois segundos. A linha na planilha, com nome, URL
+  // e data, já é quase todo o valor.
+  if (!nome) {
     return Response.json(
       {
         erro: 'campos_obrigatorios_ausentes',
-        mensagem: 'A captura precisa pelo menos do nome e da empresa.',
-        faltando: [!nome && 'nome', !empresa && 'empresa'].filter(Boolean),
+        mensagem: 'A captura precisa pelo menos do nome.',
+        faltando: ['nome'],
       },
       { status: 400 },
+    )
+  }
+
+  if (!empresa) {
+    console.warn(
+      '[extensao/prospeccao] captura sem empresa — gravando assim mesmo:',
+      { membro: membro.email, linkedinUrl },
     )
   }
 
@@ -84,19 +98,24 @@ export async function POST(req: Request) {
     )
   }
 
-  try {
-    const crm = await chamarRpcCrm('crm_registrar_captura_linkedin', {
-      p_membro_email: membro.email,
-      p_nome: nome,
-      p_empresa: empresa,
-      p_cargo: cargo || null,
-      p_linkedin_url: linkedinUrl || null,
-    })
-    if (!crm.ok) {
-      console.error('[extensao/prospeccao] falha ao gravar no CRM:', crm.erro, crm.mensagem)
+  // Sem empresa não dá para criar organização no CRM — é o nome dela que
+  // identifica o registro. A linha na planilha já foi gravada de qualquer
+  // forma; o CRM fica de fora desta captura, e não o contrário.
+  if (empresa) {
+    try {
+      const crm = await chamarRpcCrm('crm_registrar_captura_linkedin', {
+        p_membro_email: membro.email,
+        p_nome: nome,
+        p_empresa: empresa,
+        p_cargo: cargo || null,
+        p_linkedin_url: linkedinUrl || null,
+      })
+      if (!crm.ok) {
+        console.error('[extensao/prospeccao] falha ao gravar no CRM:', crm.erro, crm.mensagem)
+      }
+    } catch (erro) {
+      console.error('[extensao/prospeccao] falha inesperada ao gravar no CRM:', erro)
     }
-  } catch (erro) {
-    console.error('[extensao/prospeccao] falha inesperada ao gravar no CRM:', erro)
   }
 
   return Response.json({

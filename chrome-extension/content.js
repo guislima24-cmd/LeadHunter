@@ -37,6 +37,61 @@
     return [headline, '']
   }
 
+  /**
+   * Separadores em que o que vem **depois** é de fato a empresa.
+   *
+   * De propósito não inclui `|`, `·` nem `-`: com esses, a headline quase
+   * sempre é uma lista de especialidades ("Vendas | B2C | SDR | Closer"), e o
+   * trecho seguinte é outra especialidade, não empregador. Gravar isso na
+   * coluna "Empresa contatada" é pior do que deixar em branco — um branco
+   * qualquer um percebe e corrige; "B2C" no lugar da empresa passa batido e
+   * contamina o funil.
+   *
+   * `da empresa` vem primeiro porque é o formato que o LinkedIn gera sozinho
+   * em português quando a pessoa não escreveu uma headline própria.
+   */
+  const SEPARADORES_DE_EMPRESA = [
+    ' da empresa ',
+    ' na empresa ',
+    ' at ',
+    ' na ',
+    ' @ ',
+  ]
+
+  function empresaDaHeadline(headline) {
+    for (const sep of SEPARADORES_DE_EMPRESA) {
+      const i = headline.indexOf(sep)
+      if (i <= 0) continue
+      const candidato = headline.slice(i + sep.length).trim()
+      // " na " também aparece no meio de frase ("Especialista na área de
+      // vendas"), e aí o que sobra é um pedaço de texto, não empregador.
+      // Nome de empresa é curto; frase não é.
+      if (candidato && candidato.length <= 60) return candidato
+    }
+    return ''
+  }
+
+  /**
+   * Empresa atual pelo cartão do topo do perfil — é onde o LinkedIn mostra o
+   * empregador como campo próprio, ao lado do logo, em vez de texto corrido.
+   *
+   * Prefere o `aria-label` ao texto visível: o rótulo de acessibilidade tem
+   * formato estável ("Empresa atual: Inter. Clique para…") justamente porque
+   * é contrato com leitor de tela, enquanto as classes e a posição do texto
+   * mudam a cada redesenho da página.
+   */
+  function empresaDoCartaoDoTopo() {
+    const alvo = document.querySelector(
+      '[aria-label*="Empresa atual"], [aria-label*="Current company"]',
+    )
+    const rotulo = alvo?.getAttribute('aria-label') ?? ''
+    const casou = rotulo.match(/(?:Empresa atual|Current company):?\s*([^.]+)/i)
+    if (casou?.[1]) return casou[1].trim()
+
+    const painel = document.querySelector('.pv-text-details__right-panel')
+    return painel?.innerText?.trim().split('\n')[0]?.trim() ?? ''
+  }
+
   function extractProfileFromMessaging() {
     // Nome: link do perfil no header da conversa ativa
     const name = queryText(
@@ -72,13 +127,19 @@
     for (const script of scripts) {
       try {
         const data = JSON.parse(script.textContent)
+        // O LinkedIn empacota os nós num `@graph`; as outras duas formas são
+        // de versões anteriores da página e continuam aqui porque custam nada.
         const person = data?.['@type'] === 'Person' ? data
           : data?.mainEntity?.['@type'] === 'Person' ? data.mainEntity
-          : null
+          : Array.isArray(data?.['@graph'])
+            ? data['@graph'].find((no) => no?.['@type'] === 'Person')
+            : null
         if (!person) continue
         const nome = person.name ?? ''
-        const cargo = person.jobTitle ?? ''
-        const empresa = person.worksFor?.name ?? person.affiliation?.name ?? ''
+        const cargo = typeof person.jobTitle === 'string' ? person.jobTitle
+          : Array.isArray(person.jobTitle) ? (person.jobTitle[0] ?? '') : ''
+        const empresaBruta = Array.isArray(person.worksFor) ? person.worksFor[0] : person.worksFor
+        const empresa = empresaBruta?.name ?? person.affiliation?.name ?? ''
         if (nome) {
           console.log('[Núcleo Comercial] JSON-LD encontrado:', { nome, cargo, empresa })
           return { nome, cargo, empresa }
@@ -92,15 +153,17 @@
     // Página /in/* — o perfil é o próprio conteúdo da página
 
     // Abordagem 0: JSON-LD (mais confiável — dados estruturados para SEO)
+    // Não devolve na hora: o JSON-LD costuma trazer o nome sem `worksFor`, e
+    // sair aqui deixava a empresa vazia sem sequer tentar as outras pistas —
+    // era o que descartava a captura inteira lá no CRM.
     const jsonLd = extractFromJsonLd()
-    if (jsonLd?.nome) {
-      return { ...jsonLd, contato: window.location.href }
-    }
 
     // ── Nome ─────────────────────────────────────────────────────────────────
     // LinkedIn NÃO usa h1 — nome vem do og:title ou título da aba
 
-    let name = queryText(
+    let name = jsonLd?.nome ?? ''
+
+    if (!name) name = queryText(
       // Tenta DOM mesmo assim (pode mudar no futuro)
       'h1', 'h2.text-heading-xlarge', '.pv-top-card--list h1'
     )
@@ -146,30 +209,43 @@
     }
 
     // Cargo = primeira parte da headline (antes do primeiro separador)
-    const cargo = headline.split(/\s*[|·]\s*/)[0].trim()
+    const cargo = jsonLd?.cargo || headline.split(/\s*[|·]\s*/)[0].trim()
 
-    // Empresa = 2ª linha não-vazia após "Experiência" (1ª é o cargo, 2ª é a empresa)
-    // Formato LinkedIn: Cargo\nEmpresa · Tipo\nData\nLocal
-    let empresa = ''
-    const bodyText2 = document.body.innerText ?? ''
-    const expBlock = bodyText2.match(/(?:Experiência|Experience)\s*\n([\s\S]{0,600})/)
-    if (expBlock) {
-      const lines = expBlock[1].split('\n')
-        .map(l => l.trim())
-        .filter(l => l.length > 2 && !/^\d{1,2}\s+de\b/i.test(l) && !/^(jan|fev|mar|abr|mai|jun|jul|ago|set|out|nov|dez|jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)/i.test(l))
-      // lines[0] = cargo, lines[1] = "Empresa · Tipo de vínculo"
-      const companyLine = lines[1] ?? ''
-      empresa = companyLine.split(/\s*·\s*/)[0].trim()
-      if (empresa) console.log('[Núcleo Comercial] Empresa via seção Experiência:', empresa)
-    }
+    // ── Empresa ──────────────────────────────────────────────────────────────
+    // Em cascata, da pista mais confiável para a mais frágil. Cada uma falha
+    // por um motivo diferente, e nenhuma sozinha cobre todo perfil: há quem
+    // não tenha empresa atual, quem escreva a headline como lista de
+    // especialidades, e perfil cuja seção Experiência nem carregou ainda.
+    let empresa = jsonLd?.empresa ?? ''
+    let origemDaEmpresa = empresa ? 'json-ld' : ''
 
-    // Fallback: tenta extrair da headline (formato "Cargo | Empresa")
     if (!empresa) {
-      const [, emp] = parseHeadline(headline)
-      empresa = emp
+      empresa = empresaDoCartaoDoTopo()
+      if (empresa) origemDaEmpresa = 'cartão do topo'
     }
 
-    console.log('[Núcleo Comercial] Extração final:', { nome: name, cargo, empresa, headline })
+    // 2ª linha não-vazia após "Experiência" (1ª é o cargo, 2ª é a empresa).
+    // Formato LinkedIn: Cargo\nEmpresa · Tipo\nData\nLocal
+    if (!empresa) {
+      const bodyText2 = document.body.innerText ?? ''
+      const expBlock = bodyText2.match(/(?:Experiência|Experience)\s*\n([\s\S]{0,600})/)
+      if (expBlock) {
+        const lines = expBlock[1].split('\n')
+          .map(l => l.trim())
+          .filter(l => l.length > 2 && !/^\d{1,2}\s+de\b/i.test(l) && !/^(jan|fev|mar|abr|mai|jun|jul|ago|set|out|nov|dez|feb|apr|may|aug|sep|oct|dec)/i.test(l))
+        empresa = (lines[1] ?? '').split(/\s*·\s*/)[0].trim()
+        if (empresa) origemDaEmpresa = 'seção Experiência'
+      }
+    }
+
+    if (!empresa) {
+      empresa = empresaDaHeadline(headline)
+      if (empresa) origemDaEmpresa = 'headline'
+    }
+
+    console.log('[Núcleo Comercial] Extração final:', {
+      nome: name, cargo, empresa, origemDaEmpresa, headline,
+    })
     return { nome: name, cargo, empresa, contato: window.location.href }
   }
 
