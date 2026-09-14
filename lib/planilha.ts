@@ -360,7 +360,7 @@ export async function registrarCapturaNaPlanilha(
   // que ninguém achou. Como a aba inteira já foi lida acima para procurar
   // duplicata, o fim dos dados sai de graça, e escrever numa linha escolhida
   // por nós torna o destino previsível e conferível.
-  const numeroDaLinha = Math.max(PRIMEIRA_LINHA_DE_DADOS, ultimaLinhaComDados(linhas) + 1)
+  const numeroDaLinha = Math.max(PRIMEIRA_LINHA_DE_DADOS, ultimaLinhaDoBloco(linhas) + 1)
 
   await sheets.spreadsheets.values.batchUpdate({
     spreadsheetId,
@@ -383,17 +383,45 @@ export async function registrarCapturaNaPlanilha(
 }
 
 /**
- * Número (1-based) da última linha que tem qualquer conteúdo.
+ * Quantas linhas vazias seguidas significam que a tabela do time acabou.
+ *
+ * Não é um número mágico: é a diferença entre "a pessoa pulou uma linha" e
+ * "aqui embaixo é outra coisa". Vinte linhas em branco não acontecem no meio
+ * de uma lista de prospecção.
+ */
+const LINHAS_VAZIAS_QUE_ENCERRAM_O_BLOCO = 20
+
+/**
+ * Número (1-based) da última linha do bloco de dados que começa na linha 3.
+ *
+ * Para de contar ao atravessar uma sequência longa de linhas vazias, em vez
+ * de pegar a última linha com conteúdo da aba inteira. O que vem depois de um
+ * buraco desses não faz parte da tabela do time — é sobra lá no fim: lista de
+ * apoio de dropdown, anotação solta, ou captura que uma versão anterior deste
+ * código gravou no lugar errado.
+ *
+ * Foi exatamente essa distinção que faltou: a aba da Anna tem conteúdo perto
+ * da linha 1003, então "última linha com conteúdo" mandava a captura nova para
+ * a linha 1004 — fora do limite da grade, e antes disso para a 1002, onde
+ * ninguém ia procurar.
  *
  * Olha a linha inteira, não uma coluna só: nesta planilha a coluna A (`Alvo`)
- * fica vazia na maioria das linhas preenchidas, então usá-la como referência
- * apontaria para o meio dos dados.
+ * fica vazia na maioria das linhas preenchidas.
  */
-function ultimaLinhaComDados(linhas: string[][]): number {
-  for (let i = linhas.length - 1; i >= PRIMEIRA_LINHA_DE_DADOS - 1; i--) {
-    if (linhas[i]?.some((celula) => String(celula ?? '').trim())) return i + 1
+function ultimaLinhaDoBloco(linhas: string[][]): number {
+  let ultima = PRIMEIRA_LINHA_DE_DADOS - 1
+  let vaziasSeguidas = 0
+
+  for (let i = PRIMEIRA_LINHA_DE_DADOS - 1; i < linhas.length; i++) {
+    if (linhas[i]?.some((celula) => String(celula ?? '').trim())) {
+      ultima = i + 1
+      vaziasSeguidas = 0
+      continue
+    }
+    if (++vaziasSeguidas >= LINHAS_VAZIAS_QUE_ENCERRAM_O_BLOCO) break
   }
-  return PRIMEIRA_LINHA_DE_DADOS - 1
+
+  return ultima
 }
 
 /**
