@@ -286,6 +286,15 @@ export interface DiagnosticoDaAba {
   proximaLinha: number
   /** Linhas com conteúdo **depois** do bloco, e quais colunas estão preenchidas. */
   conteudoAbaixoDoBloco: { linha: number; colunas: string }[]
+  /** Faixas contínuas de linhas com conteúdo, para enxergar onde a tabela realmente acaba. */
+  faixasComConteudo: { de: number; ate: number; colunas: string }[]
+}
+
+/** Letras das colunas preenchidas numa linha — `"CEFGI"`. Nunca os valores. */
+function colunasPreenchidas(linha: string[] | undefined): string {
+  return (linha ?? [])
+    .map((celula, col) => (String(celula ?? '').trim() ? String.fromCharCode(65 + col) : ''))
+    .join('')
 }
 
 /**
@@ -307,11 +316,21 @@ export async function diagnosticarBloco(aba: string): Promise<DiagnosticoDaAba> 
 
   const conteudoAbaixoDoBloco: { linha: number; colunas: string }[] = []
   for (let i = fimDoBloco; i < linhas.length; i++) {
-    const preenchidas = (linhas[i] ?? [])
-      .map((celula, col) => (String(celula ?? '').trim() ? String.fromCharCode(65 + col) : ''))
-      .filter(Boolean)
-    if (preenchidas.length) {
-      conteudoAbaixoDoBloco.push({ linha: i + 1, colunas: preenchidas.join('') })
+    const colunas = colunasPreenchidas(linhas[i])
+    if (colunas) conteudoAbaixoDoBloco.push({ linha: i + 1, colunas })
+  }
+
+  // Agrupa em faixas contínuas: 540 linhas uma a uma não cabem numa resposta,
+  // e o que interessa é onde estão os buracos, não cada linha isolada.
+  const faixasComConteudo: { de: number; ate: number; colunas: string }[] = []
+  for (let i = PRIMEIRA_LINHA_DE_DADOS - 1; i < linhas.length; i++) {
+    const colunas = colunasPreenchidas(linhas[i])
+    if (!colunas) continue
+    const ultima = faixasComConteudo.at(-1)
+    if (ultima && ultima.ate === i && ultima.colunas === colunas) {
+      ultima.ate = i + 1
+    } else {
+      faixasComConteudo.push({ de: i + 1, ate: i + 1, colunas })
     }
   }
 
@@ -321,6 +340,7 @@ export async function diagnosticarBloco(aba: string): Promise<DiagnosticoDaAba> 
     ultimaLinhaDoBloco: fimDoBloco,
     proximaLinha: Math.max(PRIMEIRA_LINHA_DE_DADOS, fimDoBloco + 1),
     conteudoAbaixoDoBloco: conteudoAbaixoDoBloco.slice(0, 40),
+    faixasComConteudo: faixasComConteudo.slice(-25),
   }
 }
 
