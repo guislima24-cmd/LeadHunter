@@ -93,6 +93,9 @@ async function enviarCaptura(payload) {
     empresa: payload.empresa ?? '',
     cargo: payload.cargo ?? '',
     linkedinUrl: payload.pageUrl ?? payload.linkedinUrl ?? '',
+    // Só existe quando a empresa não pôde ser lida da página; o CRM registra
+    // no log para que a leitura possa ser corrigida sem adivinhação.
+    ...(payload.diagnostico ? { diagnostico: payload.diagnostico } : {}),
   })
 }
 

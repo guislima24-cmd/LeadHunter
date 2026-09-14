@@ -114,14 +114,51 @@
    */
   function empresaDoCartaoDoTopo() {
     const alvo = document.querySelector(
-      '[aria-label*="Empresa atual"], [aria-label*="Current company"]',
+      '[aria-label*="Empresa atual"], [aria-label*="Current company"], ' +
+      '[aria-label*="empresa atual"], [aria-label*="current company"]',
     )
     const rotulo = alvo?.getAttribute('aria-label') ?? ''
     const casou = rotulo.match(/(?:Empresa atual|Current company):?\s*([^.]+)/i)
     if (casou?.[1]) return casou[1].trim()
 
-    const painel = document.querySelector('.pv-text-details__right-panel')
-    return painel?.innerText?.trim().split('\n')[0]?.trim() ?? ''
+    // O bloco fica à direita do nome, com o logo da empresa. As classes mudam
+    // a cada redesenho, então tenta as conhecidas e, por último, o link para a
+    // página da empresa — que é o que o logo sempre envolve.
+    for (const sel of [
+      '.pv-text-details__right-panel',
+      '.pv-top-card--experience-list',
+      'section[data-member-id] a[href*="/company/"]',
+      'main a[href*="/company/"]',
+    ]) {
+      const el = document.querySelector(sel)
+      const texto = el?.innerText?.trim().split('\n')[0]?.trim() ?? ''
+      if (texto && texto.length <= 60) return texto
+    }
+    return ''
+  }
+
+  /**
+   * O que a página oferecia quando a empresa não saiu.
+   *
+   * Vai junto da captura só nesse caso, e serve para consertar a leitura sem
+   * depender de alguém abrir o console e me descrever o DOM. São dados
+   * públicos do perfil (headline e rótulos de acessibilidade), truncados.
+   */
+  function diagnosticoDaEmpresa(headline) {
+    const rotulos = [...document.querySelectorAll('[aria-label]')]
+      .map((el) => el.getAttribute('aria-label') ?? '')
+      .filter((r) => /empresa|company/i.test(r))
+      .slice(0, 6)
+      .map((r) => r.slice(0, 90))
+
+    const linkDeEmpresa = document.querySelector('main a[href*="/company/"]')
+
+    return {
+      headline: (headline ?? '').slice(0, 140),
+      rotulos,
+      temPainelDireito: Boolean(document.querySelector('.pv-text-details__right-panel')),
+      textoDoLinkDeEmpresa: (linkDeEmpresa?.innerText ?? '').trim().slice(0, 60),
+    }
   }
 
   function extractProfileFromMessaging() {
@@ -278,7 +315,14 @@
     console.log('[Núcleo Comercial] Extração final:', {
       nome: name, cargo, empresa, origemDaEmpresa, headline,
     })
-    return { nome: name, cargo, empresa, contato: window.location.href }
+
+    return {
+      nome: name,
+      cargo,
+      empresa,
+      contato: window.location.href,
+      ...(empresa ? {} : { diagnostico: diagnosticoDaEmpresa(headline) }),
+    }
   }
 
   function extractProfile() {

@@ -62,9 +62,12 @@ export async function POST(req: Request) {
   }
 
   if (!empresa) {
+    // `diagnostico` é o que a extensão viu na página quando não conseguiu ler
+    // a empresa. Sem isso, corrigir a leitura vira palpite: o LinkedIn muda o
+    // markup e daqui não dá para inspecioná-lo.
     console.warn(
       '[extensao/prospeccao] captura sem empresa — gravando assim mesmo:',
-      { membro: membro.email, linkedinUrl },
+      { membro: membro.email, linkedinUrl, diagnostico: corpo.diagnostico ?? null },
     )
   }
 
