@@ -35,7 +35,8 @@ const COL = {
   idSync: 21, // V
 } as const
 
-const TOTAL_COLUNAS = 22 // A–V
+/** Linha 1 é o cabeçalho, linha 2 é a legenda; os dados começam na 3. */
+const PRIMEIRA_LINHA_DE_DADOS = 3
 
 export class PlanilhaNaoConfiguradaError extends Error {
   constructor(detalhe: string) {
@@ -351,28 +352,48 @@ export async function registrarCapturaNaPlanilha(
     return { linha: numeroDaLinha, novaLinha: false }
   }
 
-  const novaLinha = new Array(TOTAL_COLUNAS).fill('')
-  novaLinha[COL.canal] = 'LinkedIn'
-  novaLinha[COL.empresa] = sanear(captura.empresa)
-  novaLinha[COL.nome] = sanear(captura.nome)
-  novaLinha[COL.numeroLink] = linkedinUrl
-  novaLinha[COL.dataConexao] = dataConexao
-  novaLinha[COL.observacoes] = cargo ? `Cargo: ${sanear(cargo)}` : ''
-  novaLinha[COL.idSync] = crypto.randomUUID()
+  // Linha nova: calculada aqui, não pelo `values.append` do Google.
+  //
+  // O `append` decide sozinho onde a tabela termina, e essa decisão é uma
+  // heurística que não dá para inspecionar nem prever — com a coluna A vazia
+  // na maior parte das linhas desta planilha, ele já colocou captura em lugar
+  // que ninguém achou. Como a aba inteira já foi lida acima para procurar
+  // duplicata, o fim dos dados sai de graça, e escrever numa linha escolhida
+  // por nós torna o destino previsível e conferível.
+  const numeroDaLinha = Math.max(PRIMEIRA_LINHA_DE_DADOS, ultimaLinhaComDados(linhas) + 1)
 
-  const anexo = await sheets.spreadsheets.values.append({
+  await sheets.spreadsheets.values.batchUpdate({
     spreadsheetId,
-    range: `${citarAba(aba)}!A:V`,
-    valueInputOption: 'RAW',
-    insertDataOption: 'INSERT_ROWS',
-    requestBody: { values: [novaLinha] },
+    requestBody: {
+      valueInputOption: 'RAW',
+      data: [
+        { range: `${citarAba(aba)}!C${numeroDaLinha}`, values: [['LinkedIn']] },
+        { range: `${citarAba(aba)}!E${numeroDaLinha}`, values: [[sanear(captura.empresa)]] },
+        { range: `${citarAba(aba)}!F${numeroDaLinha}`, values: [[sanear(captura.nome)]] },
+        { range: `${citarAba(aba)}!G${numeroDaLinha}`, values: [[linkedinUrl]] },
+        { range: `${citarAba(aba)}!I${numeroDaLinha}`, values: [[dataConexao]] },
+        { range: `${citarAba(aba)}!U${numeroDaLinha}`, values: [[cargo ? `Cargo: ${sanear(cargo)}` : '']] },
+        { range: `${citarAba(aba)}!V${numeroDaLinha}`, values: [[crypto.randomUUID()]] },
+      ],
+    },
   })
 
   await garantirCabecalhoIdSync(sheets, spreadsheetId, aba, linhas)
+  return { linha: numeroDaLinha, novaLinha: true }
+}
 
-  const intervaloEscrito = anexo.data.updates?.updatedRange ?? ''
-  const numeroDaLinha = Number(intervaloEscrito.match(/(\d+)(?::|$)/)?.[1] ?? 0)
-  return { linha: numeroDaLinha || linhas.length + 1, novaLinha: true }
+/**
+ * Número (1-based) da última linha que tem qualquer conteúdo.
+ *
+ * Olha a linha inteira, não uma coluna só: nesta planilha a coluna A (`Alvo`)
+ * fica vazia na maioria das linhas preenchidas, então usá-la como referência
+ * apontaria para o meio dos dados.
+ */
+function ultimaLinhaComDados(linhas: string[][]): number {
+  for (let i = linhas.length - 1; i >= PRIMEIRA_LINHA_DE_DADOS - 1; i--) {
+    if (linhas[i]?.some((celula) => String(celula ?? '').trim())) return i + 1
+  }
+  return PRIMEIRA_LINHA_DE_DADOS - 1
 }
 
 /**

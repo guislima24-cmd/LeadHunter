@@ -118,6 +118,16 @@ export async function POST(req: Request) {
     }
   }
 
+  // Onde exatamente a linha caiu: é a única forma de conferir isso sem pedir
+  // para alguém procurar na planilha a olho.
+  console.info(
+    '[extensao/prospeccao] gravado em %s!%d (%s):',
+    membro.abaPlanilha,
+    resultado.linha,
+    resultado.novaLinha ? 'linha nova' : 'linha existente atualizada',
+    { nome, empresa: empresa || '(vazia)' },
+  )
+
   return Response.json({
     ok: true,
     linha: resultado.linha,
